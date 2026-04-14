@@ -1,0 +1,136 @@
+#ifndef EGS_EGS_HPP
+#define EGS_EGS_HPP
+
+#include <concepts>
+#include <cstddef>
+#include <iterator>
+#include <span>
+
+#include <absl/container/flat_hash_map.h>
+#include <absl/container/inlined_vector.h>
+
+#include "egs/internal/common.hpp"
+#include "egs/internal/dsu.hpp"
+
+namespace egs {
+
+template <Operator Op> struct EGraph {
+public:
+  Id add(Op op, std::span<Id> args);
+  bool merge(Id a, Id b);
+  void rebuild();
+  Id find(Id id);
+
+private:
+  internal::dsu dsu;
+  absl::flat_hash_map<internal::ENode<Op>, Id> hashcons;
+  std::vector<internal::EClass<Op>> classes;
+  std::vector<Id> worklist;
+};
+
+// User is suppose to specialize this for their AST, with the following
+// methods:
+// static Op get_op(const UserAST &ast);
+// static std::span<const UserAST*> get_args(const UserAST &ast);
+// Optionally, user can implement `parse_op` method for S-expr pattern AST
+// parsing:
+// static Op parse_op(std::string_view str);
+template <typename UserAST> struct EGraphTraits {};
+
+template <typename UserAST, typename Op>
+concept EGraphCompatible = requires(const UserAST ast) {
+  requires Operator<Op>;
+  { EGraphTraits<UserAST>::get_op(ast) } -> std::convertible_to<Op>;
+  { EGraphTraits<UserAST>::get_args(ast) } -> std::ranges::contiguous_range;
+  requires std::same_as<std::ranges::range_value_t<
+                            decltype(EGraphTraits<UserAST>::get_args(ast))>,
+                        const UserAST *>;
+};
+
+template <Operator Op, typename UserAST>
+  requires EGraphCompatible<UserAST, Op>
+Id add_tree(EGraph<Op> &egraph, const UserAST &ast);
+
+} // namespace egs
+
+// implmentations
+
+namespace egs {
+
+template <Operator Op, typename UserAST>
+  requires EGraphCompatible<UserAST, Op>
+Id add_tree(EGraph<Op> &egraph, const UserAST &ast) {
+  using Traits = EGraphTraits<UserAST>;
+
+  absl::InlinedVector<Id, 2> arg_ids;
+  for (const auto &arg : Traits::get_args(ast))
+    arg_ids.push_back(add_tree(egraph, *arg));
+  return egraph.add(Traits::get_op(ast), arg_ids);
+}
+
+template <Operator Op> Id EGraph<Op>::add(Op op, std::span<Id> args) {
+  for (Id arg : args)
+    arg = find(arg);
+
+  if (auto it = hashcons.find({op, {args.begin(), args.end()}});
+      it != hashcons.end())
+    return it->second;
+
+  Id id = dsu.make_set();
+  internal::ENode<Op> node{op, {args.begin(), args.end()}};
+  classes.emplace_back(id, decltype(internal::EClass<Op>::nodes){node},
+                       decltype(internal::EClass<Op>::parents){});
+  hashcons.emplace(node, id);
+
+  for (Id arg : args)
+    classes[find(arg).val].parents.emplace_back(node, id);
+
+  return id;
+}
+
+template <Operator Op> bool EGraph<Op>::merge(Id a, Id b) {
+  a = find(a), b = find(b);
+  if (a == b)
+    return false;
+
+  Id nid = dsu.merge(a, b);
+  Id old_id = (nid == a) ? b : a;
+  internal::EClass<Op> &new_class = classes[nid.val],
+                       &old_class = classes[old_id.val];
+  new_class.nodes.insert(new_class.nodes.end(),
+                         std::make_move_iterator(old_class.nodes.begin()),
+                         std::make_move_iterator(old_class.nodes.end()));
+  new_class.parents.insert(new_class.parents.end(),
+                           std::make_move_iterator(old_class.parents.begin()),
+                           std::make_move_iterator(old_class.parents.end));
+  old_class.nodes.clear();
+  old_class.parents.clear();
+
+  worklist.push_back(nid);
+}
+
+template <Operator Op> void EGraph<Op>::rebuild() {
+  while (!worklist.empty()) {
+    Id id = worklist.back();
+    worklist.pop_back();
+    internal::EClass<Op> &eclass = classes[id.val];
+
+    for (const auto &[node, parent_id] : eclass.parents) {
+      hashcons.erase(node);
+      for (Id &arg : node.args)
+        arg = find(arg);
+      if (auto it = hashcons.find(node); it != hashcons.end()) {
+        Id existing_id = it->second;
+        if (existing_id != parent_id)
+          merge(existing_id, parent_id);
+      } else
+        hashcons.emplace(node, parent_id);
+    }
+  }
+}
+
+template <Operator Op> Id EGraph<Op>::find(Id id) { return dsu.find(id); }
+
+} // namespace egs
+
+#endif
