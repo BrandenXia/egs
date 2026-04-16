@@ -62,15 +62,15 @@ struct CompiledPattern {
   std::vector<Reg> var_regs;
 };
 
+constexpr auto MAX_REGS = 16;
+
 template <Operator Op>
 struct MachineState {
-  int pc;
-  std::vector<Id> id_regs;
-  std::size_t table_iter_idx;
-  std::vector<const internal::ENode<Op> *> node_regs;
+  int pc = 0;
+  std::size_t table_iter_idx = 0;
+  std::array<Id, MAX_REGS> id_regs = {};
+  std::array<const internal::ENode<Op> *, MAX_REGS> node_regs = {};
 };
-
-constexpr auto MAX_REGS = 16;
 
 template <Operator Op>
 std::vector<Match<Op>>
@@ -79,7 +79,7 @@ search_relational(EGraph<Op> &egraph, const std::vector<Inst<Op>> &program,
   std::vector<Match<Op>> results;
   std::vector<MachineState<Op>> stack;
 
-  stack.push_back(MachineState<Op>{0, std::vector(MAX_REGS, Id{0}), 0});
+  stack.push_back(MachineState<Op>{});
 
   while (!stack.empty()) {
     auto state = stack.back();

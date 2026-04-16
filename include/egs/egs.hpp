@@ -9,6 +9,7 @@
 #include <absl/container/flat_hash_map.h>
 #include <absl/container/inlined_vector.h>
 
+#include "egs/extract.hpp"
 #include "egs/internal/common.hpp"
 #include "egs/internal/dsu.hpp"
 #include "egs/pattern.hpp"
@@ -37,6 +38,8 @@ private:
                               const std::vector<internal::Inst<Op>> &program,
                               internal::Reg root_eclass_reg,
                               const std::vector<internal::Reg> &var_regs);
+  template <Operator Op_, typename CostType>
+  friend struct Extractor;
 };
 
 // User is suppose to specialize this for their AST, with the following

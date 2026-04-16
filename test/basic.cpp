@@ -1,3 +1,7 @@
+#include <iostream>
+#include <variant>
+#include <vector>
+
 #include "egs/egs.hpp"
 #include "egs/pattern.hpp"
 
@@ -39,21 +43,46 @@ struct egs::EGraphTraits<Expr> {
   }
 };
 
+struct AstSizeCost {
+  std::uint32_t operator()(MyOp op,
+                           const std::vector<std::uint32_t> &arg_costs) const {
+    std::uint32_t cost = 1;
+    for (auto c : arg_costs)
+      cost += c;
+    if (op.code == OpCode::Const) cost += 1;
+    if (op.code == OpCode::Add) cost += 10;
+    return cost;
+  }
+};
+
+void print_tree(egs::ExtractedTree<MyOp> tree, int indent = 0) {
+  std::string indent_str(indent, ' ');
+  if (tree.op.code == OpCode::Const) {
+    std::cout << indent_str << "Const(" << tree.op.val << ")\n";
+  } else {
+    std::cout << indent_str << "Add\n";
+    for (const auto &arg : tree.args)
+      print_tree(arg, indent + 2);
+  }
+}
+
 int main() {
   using namespace egs;
 
-  EGraph<MyOp> egraph;
-
-  Expr my_ast_root = Expr{Add{new Expr{Const{5}}, new Expr{Const{0}}}};
-
-  add_tree(egraph, my_ast_root);
+  auto egraph = EGraph<MyOp>{};
+  auto my_ast_root = Expr{Add{new Expr{Const{5}}, new Expr{Const{0}}}};
+  auto root = add_tree(egraph, my_ast_root);
 
   using P = Pattern<MyOp>;
   auto fold_zero = RwRule<MyOp>(
       P::op(MyOp{OpCode::Add}, {P::var(0), P::op(MyOp{OpCode::Const, 0}, {})}),
       P::var(0));
-
-  std::vector<RwRule<MyOp>> rules{fold_zero};
-
+  auto rules = std::vector{fold_zero};
   run(egraph, {rules});
+
+  std::cout << "Total nodes in egraph: " << egraph.total_nodes() << "\n";
+
+  auto extractor = Extractor{egraph, AstSizeCost{}, UINT32_MAX};
+  auto best = extractor.extract(root, egraph);
+  print_tree(best);
 }

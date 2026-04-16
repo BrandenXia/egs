@@ -129,6 +129,8 @@ Id add_pattern(EGraph<Op> &egraph, const Pattern<Op> &pat,
 template <Operator Op>
 StopReason run(EGraph<Op> &egraph, std::span<const RwRule<Op>> rules,
                RunConfig config) {
+  egraph.rebuild();
+
   for (int iter = 0; iter < config.max_iterations; iter++) {
     std::vector<RuleMatches<Op>> all_matches;
 
