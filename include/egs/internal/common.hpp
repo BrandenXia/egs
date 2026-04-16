@@ -6,7 +6,7 @@
 #include <functional>
 #include <utility>
 
-#include "absl/container/inlined_vector.h"
+#include <absl/container/inlined_vector.h>
 
 namespace egs {
 

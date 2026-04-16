@@ -11,6 +11,7 @@
 
 #include "egs/internal/common.hpp"
 #include "egs/internal/dsu.hpp"
+#include "egs/pattern.hpp"
 
 namespace egs {
 
@@ -20,12 +21,21 @@ public:
   bool merge(Id a, Id b);
   void rebuild();
   Id find(Id id);
+  std::size_t total_nodes() const;
 
 private:
   internal::dsu dsu;
   absl::flat_hash_map<internal::ENode<Op>, Id> hashcons;
   std::vector<internal::EClass<Op>> classes;
   std::vector<Id> worklist;
+  absl::flat_hash_map<Op, std::vector<std::pair<Id, internal::ENode<Op>>>>
+      op_index;
+
+  friend std::vector<Match<Op>>
+  internal::search_relational(EGraph<Op> &egraph,
+                              const std::vector<internal::Inst<Op>> &program,
+                              internal::Reg root_eclass_reg,
+                              const std::vector<internal::Reg> &var_regs);
 };
 
 // User is suppose to specialize this for their AST, with the following
@@ -102,11 +112,13 @@ template <Operator Op> bool EGraph<Op>::merge(Id a, Id b) {
                          std::make_move_iterator(old_class.nodes.end()));
   new_class.parents.insert(new_class.parents.end(),
                            std::make_move_iterator(old_class.parents.begin()),
-                           std::make_move_iterator(old_class.parents.end));
+                           std::make_move_iterator(old_class.parents.end()));
   old_class.nodes.clear();
   old_class.parents.clear();
 
   worklist.push_back(nid);
+
+  return true;
 }
 
 template <Operator Op> void EGraph<Op>::rebuild() {
@@ -115,7 +127,7 @@ template <Operator Op> void EGraph<Op>::rebuild() {
     worklist.pop_back();
     internal::EClass<Op> &eclass = classes[id.val];
 
-    for (const auto &[node, parent_id] : eclass.parents) {
+    for (auto &[node, parent_id] : eclass.parents) {
       hashcons.erase(node);
       for (Id &arg : node.args)
         arg = find(arg);
@@ -127,9 +139,24 @@ template <Operator Op> void EGraph<Op>::rebuild() {
         hashcons.emplace(node, parent_id);
     }
   }
+
+  op_index.clear();
+  for (const auto &eclass : classes) {
+    if (eclass.nodes.empty())
+      continue;
+    for (const auto &node : eclass.nodes)
+      op_index[node.op].emplace_back(eclass.id, node);
+  }
 }
 
 template <Operator Op> Id EGraph<Op>::find(Id id) { return dsu.find(id); }
+
+template <Operator Op> std::size_t EGraph<Op>::total_nodes() const {
+  std::size_t count = 0;
+  for (const auto &eclass : classes)
+    count += eclass.nodes.size();
+  return count;
+}
 
 } // namespace egs
 

@@ -48,9 +48,13 @@ int main() {
 
   add_tree(egraph, my_ast_root);
 
+  using P = Pattern<MyOp>;
   RwRule<MyOp> fold_zero = {
-      .searcher = Pattern<MyOp>::op(
-          MyOp{OpCode::Add}, {Pattern<MyOp>::var(0),
-                              Pattern<MyOp>::op(MyOp{OpCode::Const, 0}, {})}),
-      .applier = Pattern<MyOp>::var(0)};
+      .searcher = P::op(MyOp{OpCode::Add},
+                        {P::var(0), P::op(MyOp{OpCode::Const, 0}, {})}),
+      .applier = P::var(0)};
+
+  std::vector<RwRule<MyOp>> rules{fold_zero};
+
+  run(egraph, {rules});
 }
