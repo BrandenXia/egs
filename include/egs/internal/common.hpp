@@ -28,15 +28,18 @@ struct Var {
 
 namespace internal {
 
-template <Operator Op> struct ENode {
+template <Operator Op>
+struct ENode {
   Op op;
   absl::InlinedVector<Id, 2> args;
   bool operator==(const ENode &) const = default;
 };
 
-template <Operator Op> struct EClass;
+template <Operator Op>
+struct EClass;
 
-template <Operator Op> struct EClass {
+template <Operator Op>
+struct EClass {
   Id id;
   absl::InlinedVector<ENode<Op>, 4> nodes;
   absl::InlinedVector<std::pair<ENode<Op>, Id>, 4> parents;
@@ -46,7 +49,8 @@ template <Operator Op> struct EClass {
 
 } // namespace egs
 
-template <egs::Operator Op> struct std::hash<egs::internal::ENode<Op>> {
+template <egs::Operator Op>
+struct std::hash<egs::internal::ENode<Op>> {
   std::size_t operator()(const egs::internal::ENode<Op> &node) const {
     std::size_t h = std::hash<Op>{}(node.op);
     auto hash = std::hash<std::uint32_t>{};

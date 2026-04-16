@@ -11,9 +11,11 @@
 
 namespace egs {
 
-template <Operator Op> struct EGraph;
+template <Operator Op>
+struct EGraph;
 
-template <Operator Op> struct Pattern {
+template <Operator Op>
+struct Pattern {
   struct Node {
     std::variant<Var, Op> payload;
     std::vector<Node> args;
@@ -50,12 +52,14 @@ enum class StopReason {
   NodeLimit,
 };
 
-template <Operator Op> struct RwRule;
+template <Operator Op>
+struct RwRule;
 template <Operator Op>
 StopReason run(EGraph<Op> &egraph, std::span<const RwRule<Op>> rules,
                RunConfig config = {});
 
-template <Operator Op> struct RwRule {
+template <Operator Op>
+struct RwRule {
 public:
   using Searcher = Pattern<Op>;
   using Applier = std::variant<Pattern<Op>, DynamicApplier<Op>>;
@@ -80,12 +84,14 @@ private:
                             RunConfig config);
 };
 
-template <Operator Op> struct Match {
+template <Operator Op>
+struct Match {
   Id eclass;
   absl::InlinedVector<Id, 4> subst;
 };
 
-template <Operator Op> struct RuleMatches {
+template <Operator Op>
+struct RuleMatches {
   const RwRule<Op> *rule;
   std::vector<Match<Op>> matches;
 };

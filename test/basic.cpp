@@ -21,11 +21,13 @@ struct MyOp {
   bool operator==(const MyOp &) const = default;
 };
 
-template <> struct std::hash<MyOp> {
+template <>
+struct std::hash<MyOp> {
   size_t operator()(const MyOp &o) const { return (size_t)o.code ^ o.val; }
 };
 
-template <> struct egs::EGraphTraits<Expr> {
+template <>
+struct egs::EGraphTraits<Expr> {
   static MyOp get_op(const Expr &e) {
     if (std::holds_alternative<Add>(e.data)) return {OpCode::Add};
     return {OpCode::Const, std::get<Const>(e.data).value};

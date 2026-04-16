@@ -9,15 +9,19 @@
 namespace egs {
 
 // forward declarations to avoid circular dependencies
-template <Operator Op> struct EGraph;
-template <Operator Op> struct Pattern;
-template <Operator Op> struct Match;
+template <Operator Op>
+struct EGraph;
+template <Operator Op>
+struct Pattern;
+template <Operator Op>
+struct Match;
 
 } // namespace egs
 
 namespace egs::internal {
 
-template <Operator Op> struct CompiledPattern;
+template <Operator Op>
+struct CompiledPattern;
 
 template <Operator Op>
 CompiledPattern<Op> compile_pattern(const Pattern<Op> &pat);
@@ -28,7 +32,8 @@ namespace egs::internal {
 
 using Reg = std::uint32_t;
 
-template <Operator Op> struct Inst {
+template <Operator Op>
+struct Inst {
   enum Type { LookUpOp, BindArg, Compare } type;
   Op op;
   Reg out_node_reg;
@@ -38,7 +43,8 @@ template <Operator Op> struct Inst {
   int child_idx;
 };
 
-template <Operator Op> struct PatternCompiler {
+template <Operator Op>
+struct PatternCompiler {
   std::vector<Inst<Op>> program;
   Reg next_id_reg = 0;
   Reg next_node_reg = 0;
@@ -49,13 +55,15 @@ template <Operator Op> struct PatternCompiler {
                std::optional<Reg> expected_id_reg = std::nullopt);
 };
 
-template <Operator Op> struct CompiledPattern {
+template <Operator Op>
+struct CompiledPattern {
   std::vector<Inst<Op>> program;
   Reg root_eclass_reg;
   std::vector<Reg> var_regs;
 };
 
-template <Operator Op> struct MachineState {
+template <Operator Op>
+struct MachineState {
   int pc;
   std::vector<Id> id_regs;
   std::size_t table_iter_idx;

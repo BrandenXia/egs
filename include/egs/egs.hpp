@@ -15,7 +15,8 @@
 
 namespace egs {
 
-template <Operator Op> struct EGraph {
+template <Operator Op>
+struct EGraph {
 public:
   Id add(Op op, std::span<Id> args);
   bool merge(Id a, Id b);
@@ -45,7 +46,8 @@ private:
 // Optionally, user can implement `parse_op` method for S-expr pattern AST
 // parsing:
 // static Op parse_op(std::string_view str);
-template <typename UserAST> struct EGraphTraits {};
+template <typename UserAST>
+struct EGraphTraits {};
 
 template <typename UserAST, typename Op>
 concept EGraphCompatible = requires(const UserAST ast) {
@@ -78,7 +80,8 @@ Id add_tree(EGraph<Op> &egraph, const UserAST &ast) {
   return egraph.add(Traits::get_op(ast), arg_ids);
 }
 
-template <Operator Op> Id EGraph<Op>::add(Op op, std::span<Id> args) {
+template <Operator Op>
+Id EGraph<Op>::add(Op op, std::span<Id> args) {
   for (Id arg : args)
     arg = find(arg);
 
@@ -98,7 +101,8 @@ template <Operator Op> Id EGraph<Op>::add(Op op, std::span<Id> args) {
   return id;
 }
 
-template <Operator Op> bool EGraph<Op>::merge(Id a, Id b) {
+template <Operator Op>
+bool EGraph<Op>::merge(Id a, Id b) {
   a = find(a), b = find(b);
   if (a == b) return false;
 
@@ -120,7 +124,8 @@ template <Operator Op> bool EGraph<Op>::merge(Id a, Id b) {
   return true;
 }
 
-template <Operator Op> void EGraph<Op>::rebuild() {
+template <Operator Op>
+void EGraph<Op>::rebuild() {
   while (!worklist.empty()) {
     Id id = worklist.back();
     worklist.pop_back();
@@ -146,9 +151,13 @@ template <Operator Op> void EGraph<Op>::rebuild() {
   }
 }
 
-template <Operator Op> Id EGraph<Op>::find(Id id) { return dsu.find(id); }
+template <Operator Op>
+Id EGraph<Op>::find(Id id) {
+  return dsu.find(id);
+}
 
-template <Operator Op> std::size_t EGraph<Op>::total_nodes() const {
+template <Operator Op>
+std::size_t EGraph<Op>::total_nodes() const {
   std::size_t count = 0;
   for (const auto &eclass : classes)
     count += eclass.nodes.size();
