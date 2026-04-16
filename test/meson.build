@@ -1,7 +1,12 @@
-test_basic = executable(
-  'test_basic',
-  'basic.cpp',
-  dependencies : egs_dep
-)
+test_inc = include_directories('deps/doctest')
 
-test('test_basic', test_basic)
+tests = ['basic']
+foreach t : tests
+  t_exe = executable(
+    t,
+    t + '.cpp',
+    dependencies : egs_dep,
+    include_directories : test_inc
+  )
+  test(t, t_exe)
+endforeach

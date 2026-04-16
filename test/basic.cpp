@@ -1,3 +1,6 @@
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include "doctest/doctest.h"
+
 #include <iostream>
 #include <variant>
 #include <vector>
@@ -66,7 +69,7 @@ void print_tree(egs::ExtractedTree<MyOp> tree, int indent = 0) {
   }
 }
 
-int main() {
+TEST_CASE("Basic egraph test") {
   using namespace egs;
 
   auto egraph = EGraph<MyOp>{};
@@ -80,9 +83,13 @@ int main() {
   auto rules = std::vector{fold_zero};
   run(egraph, {rules});
 
-  std::cout << "Total nodes in egraph: " << egraph.total_nodes() << "\n";
+  REQUIRE(egraph.total_nodes() == 3);
 
   auto extractor = Extractor{egraph, AstSizeCost{}, UINT32_MAX};
   auto best = extractor.extract(root, egraph);
+
+  CHECK(best.op.code == OpCode::Const);
+  CHECK(best.op.val == 5);
+
   print_tree(best);
 }
