@@ -39,27 +39,6 @@ template <Operator Op> struct Pattern {
 template <Operator Op>
 using DynamicApplier = std::function<Id(EGraph<Op> &, std::span<const Id>)>;
 
-template <Operator Op> struct RwRule {
-  using Searcher = Pattern<Op>;
-  using Applier = std::variant<Pattern<Op>, DynamicApplier<Op>>;
-
-  std::optional<std::string> name;
-  Searcher searcher;
-  Applier applier;
-
-  std::optional<internal::CompiledPattern<Op>> compiled_searcher;
-};
-
-template <Operator Op> struct Match {
-  Id eclass;
-  absl::InlinedVector<Id, 4> subst;
-};
-
-template <Operator Op> struct RuleMatches {
-  const RwRule<Op> *rule;
-  std::vector<Match<Op>> matches;
-};
-
 struct RunConfig {
   int max_iterations = 100;
   size_t node_limit = 100000;
@@ -71,9 +50,45 @@ enum class StopReason {
   NodeLimit,
 };
 
+template <Operator Op> struct RwRule;
 template <Operator Op>
-StopReason run(EGraph<Op> &egraph, std::span<RwRule<Op>> rules,
+StopReason run(EGraph<Op> &egraph, std::span<const RwRule<Op>> rules,
                RunConfig config = {});
+
+template <Operator Op> struct RwRule {
+public:
+  using Searcher = Pattern<Op>;
+  using Applier = std::variant<Pattern<Op>, DynamicApplier<Op>>;
+
+  constexpr RwRule(std::string_view n, Searcher s, Applier a)
+      : RwRule(std::optional<std::string>(n), std::move(s), std::move(a)) {}
+  constexpr RwRule(Searcher s, Applier a)
+      : RwRule(std::nullopt, std::move(s), std::move(a)) {}
+  constexpr RwRule(std::optional<std::string> n, Searcher s, Applier a)
+      : name(n), searcher(std::move(s)), applier(std::move(a)),
+        compiled_searcher(internal::compile_pattern(searcher)) {}
+
+private:
+  std::optional<std::string> name;
+  Searcher searcher;
+  Applier applier;
+
+  internal::CompiledPattern<Op> compiled_searcher;
+
+  friend StopReason run<Op>(EGraph<Op> &egraph,
+                            std::span<const RwRule<Op>> rules,
+                            RunConfig config);
+};
+
+template <Operator Op> struct Match {
+  Id eclass;
+  absl::InlinedVector<Id, 4> subst;
+};
+
+template <Operator Op> struct RuleMatches {
+  const RwRule<Op> *rule;
+  std::vector<Match<Op>> matches;
+};
 
 } // namespace egs
 
@@ -106,18 +121,16 @@ Id add_pattern(EGraph<Op> &egraph, const Pattern<Op> &pat,
 } // namespace internal
 
 template <Operator Op>
-StopReason run(EGraph<Op> &egraph, std::span<RwRule<Op>> rules,
+StopReason run(EGraph<Op> &egraph, std::span<const RwRule<Op>> rules,
                RunConfig config) {
   for (int iter = 0; iter < config.max_iterations; iter++) {
     std::vector<RuleMatches<Op>> all_matches;
 
-    for (auto &rule : rules) {
-      if (!rule.compiled_searcher.has_value())
-        rule.compiled_searcher = internal::compile_pattern(rule.searcher);
+    for (const auto &rule : rules) {
       auto matches =
-          internal::search_relational(egraph, rule.compiled_searcher->program,
-                                      rule.compiled_searcher->root_eclass_reg,
-                                      rule.compiled_searcher->var_regs);
+          internal::search_relational(egraph, rule.compiled_searcher.program,
+                                      rule.compiled_searcher.root_eclass_reg,
+                                      rule.compiled_searcher.var_regs);
       if (!matches.empty())
         all_matches.push_back(RuleMatches<Op>{&rule, std::move(matches)});
     }
