@@ -1,5 +1,5 @@
-#ifndef EGS_INTERNAL_SEARCH_HPP
-#define EGS_INTERNAL_SEARCH_HPP
+#ifndef EGS_INTERNAL_SEARCH_PATTERN_HPP
+#define EGS_INTERNAL_SEARCH_PATTERN_HPP
 
 #include <cstdint>
 #include <unordered_map>

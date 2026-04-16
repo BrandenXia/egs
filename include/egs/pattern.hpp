@@ -7,7 +7,7 @@
 #include <variant>
 
 #include "egs/internal/common.hpp"
-#include "egs/internal/search.hpp"
+#include "egs/internal/search_pattern.hpp"
 
 namespace egs {
 
