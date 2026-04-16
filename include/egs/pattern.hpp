@@ -135,8 +135,7 @@ StopReason run(EGraph<Op> &egraph, std::span<const RwRule<Op>> rules,
         all_matches.push_back(RuleMatches<Op>{&rule, std::move(matches)});
     }
 
-    if (all_matches.empty())
-      return StopReason::Saturated;
+    if (all_matches.empty()) return StopReason::Saturated;
 
     bool graph_changed = false;
 
@@ -152,8 +151,7 @@ StopReason run(EGraph<Op> &egraph, std::span<const RwRule<Op>> rules,
             },
             rule->applier);
 
-        if (egraph.merge(match.eclass, nid))
-          graph_changed = true;
+        if (egraph.merge(match.eclass, nid)) graph_changed = true;
       }
 
     if (graph_changed)
@@ -161,8 +159,7 @@ StopReason run(EGraph<Op> &egraph, std::span<const RwRule<Op>> rules,
     else
       return StopReason::Saturated;
 
-    if (egraph.total_nodes() > config.node_limit)
-      return StopReason::NodeLimit;
+    if (egraph.total_nodes() > config.node_limit) return StopReason::NodeLimit;
   }
 
   return StopReason::IterationLimit;

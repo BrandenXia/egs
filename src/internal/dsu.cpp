@@ -10,17 +10,14 @@ Id dsu::make_set() {
 }
 
 Id dsu::find(Id id) {
-  if (parent[id.val] == id)
-    return id;
+  if (parent[id.val] == id) return id;
   return parent[id.val] = find(parent[id.val]);
 }
 
 Id dsu::merge(Id a, Id b) {
   a = find(a), b = find(b);
-  if (a == b)
-    return a;
-  if (rank[a.val] < rank[b.val])
-    std::swap(a, b);
+  if (a == b) return a;
+  if (rank[a.val] < rank[b.val]) std::swap(a, b);
   parent[b.val] = a;
   rank[a.val] += rank[b.val];
   return a;

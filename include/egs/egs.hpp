@@ -100,8 +100,7 @@ template <Operator Op> Id EGraph<Op>::add(Op op, std::span<Id> args) {
 
 template <Operator Op> bool EGraph<Op>::merge(Id a, Id b) {
   a = find(a), b = find(b);
-  if (a == b)
-    return false;
+  if (a == b) return false;
 
   Id nid = dsu.merge(a, b);
   Id old_id = (nid == a) ? b : a;
@@ -133,8 +132,7 @@ template <Operator Op> void EGraph<Op>::rebuild() {
         arg = find(arg);
       if (auto it = hashcons.find(node); it != hashcons.end()) {
         Id existing_id = it->second;
-        if (existing_id != parent_id)
-          merge(existing_id, parent_id);
+        if (existing_id != parent_id) merge(existing_id, parent_id);
       } else
         hashcons.emplace(node, parent_id);
     }
@@ -142,8 +140,7 @@ template <Operator Op> void EGraph<Op>::rebuild() {
 
   op_index.clear();
   for (const auto &eclass : classes) {
-    if (eclass.nodes.empty())
-      continue;
+    if (eclass.nodes.empty()) continue;
     for (const auto &node : eclass.nodes)
       op_index[node.op].emplace_back(eclass.id, node);
   }

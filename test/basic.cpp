@@ -27,14 +27,12 @@ template <> struct std::hash<MyOp> {
 
 template <> struct egs::EGraphTraits<Expr> {
   static MyOp get_op(const Expr &e) {
-    if (std::holds_alternative<Add>(e.data))
-      return {OpCode::Add};
+    if (std::holds_alternative<Add>(e.data)) return {OpCode::Add};
     return {OpCode::Const, std::get<Const>(e.data).value};
   }
 
   static std::vector<const Expr *> get_args(const Expr &e) {
-    if (auto *a = std::get_if<Add>(&e.data))
-      return {a->left, a->right};
+    if (auto *a = std::get_if<Add>(&e.data)) return {a->left, a->right};
     return {};
   }
 };

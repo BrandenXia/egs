@@ -92,8 +92,7 @@ search_relational(EGraph<Op> &egraph, const std::vector<Inst<Op>> &program,
     switch (inst.type) {
     case Inst<Op>::LookUpOp: {
       auto it = egraph.op_index.find(inst.op);
-      if (it == egraph.op_index.end())
-        break;
+      if (it == egraph.op_index.end()) break;
 
       const auto &table = it->second;
       if (state.table_iter_idx + 1 < table.size()) {
@@ -128,8 +127,7 @@ search_relational(EGraph<Op> &egraph, const std::vector<Inst<Op>> &program,
       Id id1 = state.id_regs[inst.out_eclass_reg];
       Id id2 = state.id_regs[inst.in_eclass_reg];
 
-      if (id1 != id2)
-        break;
+      if (id1 != id2) break;
 
       MachineState<Op> new_state = state;
       new_state.pc++;
@@ -151,9 +149,9 @@ void PatternCompiler<Op>::compile(const typename Pattern<Op>::Node &node,
     auto it = var2reg.find(var_id);
     if (it != var2reg.end())
       program.push_back({
-          .type = Inst<Op>::Compare,
-          .out_eclass_reg = expected_id_reg.value(),
-          .in_eclass_reg = it->second,
+        .type = Inst<Op>::Compare,
+        .out_eclass_reg = expected_id_reg.value(),
+        .in_eclass_reg = it->second,
       });
     else
       var2reg[var_id] = expected_id_reg.value();
@@ -162,25 +160,27 @@ void PatternCompiler<Op>::compile(const typename Pattern<Op>::Node &node,
     Reg node_reg = next_node_reg++;
     Reg id_reg = next_id_reg++;
 
-    program.push_back({.type = Inst<Op>::LookUpOp,
-                       .op = op,
-                       .out_node_reg = node_reg,
-                       .out_eclass_reg = id_reg});
+    program.push_back(
+        {.type = Inst<Op>::LookUpOp,
+         .op = op,
+         .out_node_reg = node_reg,
+         .out_eclass_reg = id_reg});
 
     if (expected_id_reg.has_value())
-      program.push_back({.type = Inst<Op>::Compare,
-                         .out_eclass_reg = expected_id_reg.value(),
-                         .in_eclass_reg = id_reg});
+      program.push_back(
+          {.type = Inst<Op>::Compare,
+           .out_eclass_reg = expected_id_reg.value(),
+           .in_eclass_reg = id_reg});
     else
       root_eclass_reg = id_reg;
 
     for (size_t i = 0; i < node.args.size(); i++) {
       Reg child_id_reg = next_id_reg++;
       program.push_back({
-          .type = Inst<Op>::BindArg,
-          .in_node_reg = node_reg,
-          .out_eclass_reg = child_id_reg,
-          .child_idx = (int)i,
+        .type = Inst<Op>::BindArg,
+        .in_node_reg = node_reg,
+        .out_eclass_reg = child_id_reg,
+        .child_idx = (int)i,
       });
       compile(node.args[i], child_id_reg);
     }
@@ -197,16 +197,16 @@ CompiledPattern<Op> compile_pattern(const Pattern<Op> &pat) {
 
   std::uint32_t max_var_id = 0;
   for (const auto &[var_id, reg] : compiler.var2reg)
-    if (var_id > max_var_id)
-      max_var_id = var_id;
+    if (var_id > max_var_id) max_var_id = var_id;
 
   std::vector<Reg> var_regs(max_var_id + 1, 0);
   for (const auto &[var_id, reg] : compiler.var2reg)
     var_regs[var_id] = reg;
 
-  return CompiledPattern<Op>{.program = std::move(compiler.program),
-                             .root_eclass_reg = compiler.root_eclass_reg,
-                             .var_regs = std::move(var_regs)};
+  return CompiledPattern<Op>{
+    .program = std::move(compiler.program),
+    .root_eclass_reg = compiler.root_eclass_reg,
+    .var_regs = std::move(var_regs)};
 }
 
 } // namespace egs::internal
