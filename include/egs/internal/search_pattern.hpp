@@ -100,7 +100,7 @@ search_relational(EGraph<Op> &egraph, const std::vector<Inst<Op>> &program,
     switch (inst.type) {
     case Inst<Op>::LookUpOp: {
       auto it = egraph.op_index.find(inst.op);
-      if (it == egraph.op_index.end()) break;
+      if (it == egraph.op_index.end() || it->second.empty()) break;
 
       const auto &table = it->second;
       if (state.table_iter_idx + 1 < table.size()) {
