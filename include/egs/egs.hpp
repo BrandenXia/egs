@@ -22,7 +22,7 @@ public:
   Id add(Op op, std::span<Id> args);
   bool merge(Id a, Id b);
   void rebuild();
-  Id find(Id id);
+  Id find(Id id) const;
   std::size_t total_nodes() const;
 
 private:
@@ -34,7 +34,7 @@ private:
       op_index;
 
   friend std::vector<Match<Op>>
-  internal::search_relational(EGraph<Op> &egraph,
+  internal::search_relational(const EGraph<Op> &egraph,
                               const std::vector<internal::Inst<Op>> &program,
                               internal::Reg root_eclass_reg,
                               const std::vector<internal::Reg> &var_regs);
@@ -155,7 +155,7 @@ void EGraph<Op>::rebuild() {
 }
 
 template <Operator Op>
-Id EGraph<Op>::find(Id id) {
+Id EGraph<Op>::find(Id id) const {
   return dsu.find(id);
 }
 

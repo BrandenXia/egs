@@ -73,9 +73,10 @@ struct MachineState {
 };
 
 template <Operator Op>
-std::vector<Match<Op>>
-search_relational(EGraph<Op> &egraph, const std::vector<Inst<Op>> &program,
-                  Reg root_eclass_reg, const std::vector<Reg> &var_regs) {
+std::vector<Match<Op>> search_relational(const EGraph<Op> &egraph,
+                                         const std::vector<Inst<Op>> &program,
+                                         Reg root_eclass_reg,
+                                         const std::vector<Reg> &var_regs) {
   std::vector<Match<Op>> results;
   std::vector<MachineState<Op>> stack;
 

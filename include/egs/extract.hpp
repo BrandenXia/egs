@@ -37,9 +37,9 @@ private:
 
 public:
   template <CostFunc<Op, CostType> Func>
-  Extractor(EGraph<Op> &egraph, Func cost_func, CostType infinity);
+  Extractor(const EGraph<Op> &egraph, Func cost_func, CostType infinity);
 
-  ExtractedTree<Op> extract(Id root, EGraph<Op> &egraph) const;
+  ExtractedTree<Op> extract(Id root, const EGraph<Op> &egraph) const;
 };
 
 } // namespace egs
@@ -48,7 +48,7 @@ namespace egs {
 
 template <Operator Op, typename CostType>
 template <CostFunc<Op, CostType> Func>
-Extractor<Op, CostType>::Extractor(EGraph<Op> &egraph, Func cost_func,
+Extractor<Op, CostType>::Extractor(const EGraph<Op> &egraph, Func cost_func,
                                    CostType infinity) {
   memo.resize(egraph.classes.size(), {infinity, nullptr});
 
@@ -89,8 +89,8 @@ Extractor<Op, CostType>::Extractor(EGraph<Op> &egraph, Func cost_func,
 }
 
 template <Operator Op, typename CostType>
-ExtractedTree<Op> Extractor<Op, CostType>::extract(Id root,
-                                                   EGraph<Op> &egraph) const {
+ExtractedTree<Op>
+Extractor<Op, CostType>::extract(Id root, const EGraph<Op> &egraph) const {
   Id canon_id = egraph.find(root);
   const CostNode &best = memo[canon_id.val];
   if (!best.best_node)

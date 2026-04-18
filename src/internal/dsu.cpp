@@ -9,9 +9,9 @@ Id dsu::make_set() {
   return id;
 }
 
-Id dsu::find(Id id) {
+Id dsu::find(Id id) const {
   if (parent[id.val] == id) return id;
-  return parent[id.val] = find(parent[id.val]);
+  return find(parent[id.val]);
 }
 
 Id dsu::merge(Id a, Id b) {

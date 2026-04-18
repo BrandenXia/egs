@@ -8,7 +8,7 @@ namespace egs::internal {
 struct dsu {
 public:
   Id make_set();
-  Id find(Id id);
+  Id find(Id id) const;
   Id merge(Id a, Id b);
 
 private:
