@@ -46,9 +46,6 @@ private:
 // methods:
 // static Op get_op(const UserAST &ast);
 // static std::span<const UserAST*> get_args(const UserAST &ast);
-// Optionally, user can implement `parse_op` method for S-expr pattern AST
-// parsing:
-// static Op parse_op(std::string_view str);
 template <typename UserAST>
 struct EGraphTraits {};
 

@@ -1,9 +1,12 @@
 #ifndef EGS_PATTERN_HPP
 #define EGS_PATTERN_HPP
 
+#include <cctype>
 #include <cstdint>
 #include <functional>
 #include <initializer_list>
+#include <stdexcept>
+#include <unordered_map>
 #include <variant>
 
 #include "egs/internal/common.hpp"
@@ -33,13 +36,25 @@ struct Pattern {
     return {n};
   }
 
+  using PatternVarMap = std::unordered_map<std::string, std::uint32_t>;
+
   template <typename Fn>
     requires std::is_invocable_r_v<Op, Fn, std::string_view>
-  static constexpr Pattern parse(std::string_view str, Fn parse_op);
+  static constexpr Pattern parse(std::string_view str, Fn parse_op,
+                                 PatternVarMap &var_map);
+
+private:
+  static constexpr std::vector<std::string_view> tokenize(std::string_view str);
+
+  template <typename Fn>
+    requires std::is_invocable_r_v<Op, Fn, std::string_view>
+  static constexpr Node parse_internal(std::span<const std::string_view> tokens,
+                                       std::size_t &pos, Fn parse_op,
+                                       PatternVarMap &var_map);
 };
 
 template <Operator Op>
-using DynamicApplier = std::function<Id(EGraph<Op> &, std::span<const Id>)>;
+using DynamicApplier = std::function<Id(EGraph<Op> &, const Match<Op> &)>;
 
 struct RunConfig {
   int max_iterations = 100;
@@ -72,6 +87,18 @@ public:
       : name(n), searcher(std::move(s)), applier(std::move(a)),
         compiled_searcher(internal::compile_pattern(searcher)) {}
 
+  template <typename Fn>
+    requires std::is_invocable_r_v<Op, Fn, std::string_view>
+  static constexpr RwRule parse(std::string_view search_str,
+                                std::string_view apply_str, Fn parse_op);
+
+  template <typename ParseFn, typename ApplierGenerator>
+    requires std::is_invocable_r_v<Op, ParseFn, std::string_view> &&
+             std::is_invocable_r_v<DynamicApplier<Op>, ApplierGenerator,
+                                   const typename Pattern<Op>::PatternVarMap &>
+  static constexpr RwRule parse(std::string_view search_str, ParseFn parse_op,
+                                ApplierGenerator applier_gen);
+
 private:
   std::optional<std::string> name;
   Searcher searcher;
@@ -99,6 +126,112 @@ struct RuleMatches {
 } // namespace egs
 
 namespace egs {
+
+template <Operator Op>
+template <typename Fn>
+  requires std::is_invocable_r_v<Op, Fn, std::string_view>
+constexpr Pattern<Op> Pattern<Op>::parse(std::string_view str, Fn parse_op,
+                                         PatternVarMap &var_map) {
+  auto tokens = tokenize(str);
+  auto pos = std::size_t{0};
+  auto root = parse_internal(tokens, pos, parse_op, var_map);
+
+  if (pos < tokens.size())
+    throw std::runtime_error("Unexpected tokens after parsing pattern: " +
+                             std::string(tokens[pos]));
+
+  return {root};
+}
+
+template <Operator Op>
+constexpr std::vector<std::string_view>
+Pattern<Op>::tokenize(std::string_view str) {
+  std::vector<std::string_view> tokens;
+  std::string_view current;
+  for (const char &c : str)
+    if (std::isspace(c)) {
+      if (!current.empty()) {
+        tokens.push_back(current);
+        current = {};
+      }
+    } else if (c == '(' || c == ')') {
+      if (!current.empty()) {
+        tokens.push_back(current);
+        current = {};
+      }
+      tokens.push_back({&c, 1});
+    } else {
+      if (current.empty())
+        current = {&c, 1};
+      else
+        current = {current.data(), current.size() + 1};
+    }
+  if (!current.empty()) tokens.push_back(current);
+  return tokens;
+}
+
+template <Operator Op>
+template <typename Fn>
+  requires std::is_invocable_r_v<Op, Fn, std::string_view>
+constexpr Pattern<Op>::Node
+Pattern<Op>::parse_internal(std::span<const std::string_view> tokens,
+                            std::size_t &pos, Fn parse_op,
+                            PatternVarMap &var_map) {
+  if (pos >= tokens.size())
+    throw std::runtime_error("Unexpected end of pattern");
+
+  auto token = tokens[pos++];
+
+  if (token == "(") {
+    if (pos >= tokens.size())
+      throw std::runtime_error("Unexpected end of pattern after '('");
+
+    auto op_token = tokens[pos++];
+    auto node = Node{parse_op(op_token), {}};
+
+    while (pos < tokens.size() && tokens[pos] != ")")
+      node.args.push_back(parse_internal(tokens, pos, parse_op, var_map));
+
+    if (pos >= tokens.size() || tokens[pos] != ")")
+      throw std::runtime_error("Expected ')' in pattern");
+
+    pos++;
+
+    return node;
+  } else if (token[0] == '?') {
+    auto token_str = std::string{token};
+    if (var_map.find(token_str) == var_map.end())
+      var_map[token_str] = static_cast<std::uint32_t>(var_map.size());
+    return {Var{var_map[token_str]}, {}};
+  } else
+    return {parse_op(token), {}};
+}
+
+template <Operator Op>
+template <typename Fn>
+  requires std::is_invocable_r_v<Op, Fn, std::string_view>
+constexpr RwRule<Op> RwRule<Op>::parse(std::string_view search_str,
+                                       std::string_view apply_str,
+                                       Fn parse_op) {
+  auto shared_vars = typename Pattern<Op>::PatternVarMap{};
+  auto searcher = Pattern<Op>::parse(search_str, parse_op, shared_vars);
+  auto applier = Pattern<Op>::parse(apply_str, parse_op, shared_vars);
+  return {searcher, applier};
+}
+
+template <Operator Op>
+template <typename ParseFn, typename ApplierGenerator>
+  requires std::is_invocable_r_v<Op, ParseFn, std::string_view> &&
+           std::is_invocable_r_v<DynamicApplier<Op>, ApplierGenerator,
+                                 const typename Pattern<Op>::PatternVarMap &>
+constexpr RwRule<Op> RwRule<Op>::parse(std::string_view search_str,
+                                       ParseFn parse_op,
+                                       ApplierGenerator applier_gen) {
+  auto shared_vars = typename Pattern<Op>::PatternVarMap{};
+  auto searcher = Pattern<Op>::parse(search_str, parse_op, shared_vars);
+  auto applier = applier_gen(shared_vars);
+  return {searcher, applier};
+}
 
 namespace internal {
 
@@ -155,7 +288,7 @@ StopReason run(EGraph<Op> &egraph, std::span<const RwRule<Op>> rules,
               if constexpr (std::is_same_v<T, Pattern<Op>>)
                 return internal::add_pattern(egraph, applier, match.subst);
               else
-                return applier(egraph, match.subst);
+                return applier(egraph, match);
             },
             rule->applier);
 

@@ -1,6 +1,6 @@
 test_inc = include_directories('deps/doctest')
 
-tests = ['basic']
+tests = ['basic', 'parse_pattern']
 foreach t : tests
   t_exe = executable(
     t,
