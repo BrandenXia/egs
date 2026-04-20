@@ -7,6 +7,7 @@
 #include <initializer_list>
 #include <stdexcept>
 #include <unordered_map>
+#include <utility>
 #include <variant>
 
 #include "egs/internal/common.hpp"
@@ -94,8 +95,6 @@ public:
   static constexpr RwRule parse(std::string_view search_str,
                                 std::string_view apply_str, Fn parse_op);
 
-  using ApplierGen = std::function<DynamicApplier<Op>(
-      const typename Pattern<Op>::PatternVarMap &)>;
   template <typename ParseFn, typename ApplierGenerator>
     requires std::is_invocable_r_v<Op, ParseFn, std::string_view> &&
              std::is_invocable_r_v<DynamicApplier<Op>, ApplierGenerator,
@@ -114,6 +113,30 @@ private:
                             std::span<const RwRule<Op>> rules,
                             RunConfig config);
 };
+
+template <Operator Op>
+constexpr std::vector<RwRule<Op>>
+make_rules(std::initializer_list<std::pair<std::string_view, std::string_view>>
+               rule_strs,
+           auto parse_op) {
+  auto rules = std::vector<RwRule<Op>>{};
+  for (const auto &[lhs, rhs] : rule_strs)
+    rules.push_back(RwRule<Op>::parse(lhs, rhs, parse_op));
+  return rules;
+}
+
+template <Operator Op>
+constexpr std::vector<RwRule<Op>> make_rules(
+    std::initializer_list<std::pair<
+        std::string_view, std::function<DynamicApplier<Op>(
+                              const typename Pattern<Op>::PaternVarMap &)>>>
+        rule_strs,
+    auto parse_op) {
+  auto rules = std::vector<RwRule<Op>>{};
+  for (const auto &[lhs, rhs] : rule_strs)
+    rules.push_back(RwRule<Op>::parse(lhs, rhs, parse_op));
+  return rules;
+}
 
 template <Operator Op>
 struct Match {

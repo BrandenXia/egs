@@ -120,8 +120,8 @@ void print_tree(egs::ExtractedTree<Op> tree, int indent = 0) {
   }
 }
 
-constexpr auto rules =
-    std::to_array<std::pair<std::string_view, std::string_view>>({
+auto rules = egs::make_rules<Op>(
+    {
       {"(d ?x ?x)", "1"},
       {"(d (+ ?x ?y) ?z)", "(+ (d ?x ?z) (d ?y ?z))"},
       {"(d (- ?x ?y) ?z)", "(- (d ?x ?z) (d ?y ?z))"},
@@ -136,7 +136,8 @@ constexpr auto rules =
       {"(* ?x 0)", "0"},
       {"(- ?x 0)", "?x"},
       {"(/ ?x 1)", "?x"},
-    });
+    },
+    parse_op);
 
 int main() {
   auto egraph = egs::EGraph<Op>{};
@@ -147,9 +148,6 @@ int main() {
   auto root = egs::add_tree(egraph, diff_expr);
 
   using R = egs::RwRule<Op>;
-  auto rw_rules = std::vector<R>{};
-  for (const auto &[lhs, rhs] : rules)
-    rw_rules.push_back(R::parse(lhs, rhs, parse_op));
 
   auto const_deriv = R::parse(
       "(d ?c ?x)", parse_op, [](const egs::Pattern<Op>::PatternVarMap &vars) {
@@ -163,9 +161,8 @@ int main() {
           return match.eclass;
         };
       });
-  rw_rules.push_back(const_deriv);
-
-  egs::run(egraph, {rw_rules});
+  rules.push_back(const_deriv);
+  egs::run(egraph, {rules});
 
   auto extractor = egs::Extractor{egraph, Cost{}, UINT32_MAX};
   auto best = extractor.extract(root, egraph);
