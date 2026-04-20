@@ -2,6 +2,7 @@
 #define EGS_EXTRACT_HPP
 
 #include <concepts>
+#include <stdexcept>
 #include <vector>
 
 #include <absl/container/inlined_vector.h>

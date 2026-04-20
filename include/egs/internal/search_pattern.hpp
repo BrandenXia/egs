@@ -1,8 +1,14 @@
 #ifndef EGS_INTERNAL_SEARCH_PATTERN_HPP
 #define EGS_INTERNAL_SEARCH_PATTERN_HPP
 
+#include <array>
 #include <cstdint>
+#include <optional>
+#include <stdexcept>
 #include <unordered_map>
+#include <utility>
+#include <variant>
+#include <vector>
 
 #include "egs/internal/common.hpp"
 

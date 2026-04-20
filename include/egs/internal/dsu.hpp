@@ -1,6 +1,9 @@
 #ifndef EGS_INTERNAL_DSU_HPP
 #define EGS_INTERNAL_DSU_HPP
 
+#include <cstdint>
+#include <vector>
+
 #include "egs/internal/common.hpp"
 
 namespace egs::internal {
@@ -13,7 +16,7 @@ public:
 
 private:
   std::vector<Id> parent;
-  std::vector<uint32_t> rank;
+  std::vector<std::uint32_t> rank;
 };
 
 } // namespace egs::internal

@@ -2,13 +2,18 @@
 #define EGS_PATTERN_HPP
 
 #include <cctype>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <initializer_list>
+#include <span>
 #include <stdexcept>
+#include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "egs/internal/common.hpp"
 #include "egs/internal/search_pattern.hpp"

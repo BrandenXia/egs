@@ -2,6 +2,7 @@
 #define EGS_INTERNAL_COMMON_HPP
 
 #include <concepts>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <utility>

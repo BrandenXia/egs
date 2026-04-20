@@ -1,5 +1,6 @@
 #include <functional>
 #include <iostream>
+#include <variant>
 
 #include "egs/egs.hpp"
 #include "egs/extract.hpp"
