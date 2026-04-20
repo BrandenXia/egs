@@ -8,6 +8,7 @@
 #include <variant>
 
 #include "egs/egs.hpp"
+#include "egs/extract.hpp"
 #include "egs/pattern.hpp"
 
 enum class OpCode { Add, Const };

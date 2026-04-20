@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "egs/egs.hpp"
+#include "egs/extract.hpp"
 #include "egs/pattern.hpp"
 
 struct Expr;
