@@ -72,7 +72,7 @@ struct Cost {
     if (op.code == OpCode::Const) cost += 1;
     if (op.code == OpCode::Var) cost += 1;
     if (op.code == OpCode::Neg) cost += 5;
-    if (op.code == OpCode::Deriv) cost += 0;
+    if (op.code == OpCode::Deriv) cost += 10;
     if (op.code == OpCode::Add || op.code == OpCode::Sub) cost += 10;
     if (op.code == OpCode::Mul || op.code == OpCode::Div) cost += 15;
     return cost;
@@ -154,7 +154,7 @@ int main() {
         auto cidx = vars.at("?c");
 
         return [cidx](egs::EGraph<Op> &eg, const egs::Match<Op> &match) {
-          egs::Id c_id = eg.find(match.subst[cidx]);
+          auto c_id = eg.find(match.subst[cidx]);
           for (const auto &node : eg.get_eclass(c_id).nodes)
             if (node.op.code == OpCode::Const)
               return eg.add(Op{OpCode::Const, node.op.val}, {});
