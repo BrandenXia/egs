@@ -20,13 +20,15 @@ struct EGraph;
 template <Operator Op>
 struct Pattern {
   struct Node {
-    std::variant<Var, Op> payload;
+    std::variant<internal::Var, Op> payload;
     std::vector<Node> args;
   };
 
   Node root;
 
-  static Pattern var(std::uint32_t var_id) { return {Node{Var{var_id}, {}}}; }
+  static Pattern var(std::uint32_t var_id) {
+    return {Node{internal::Var{var_id}, {}}};
+  }
 
   static constexpr Pattern op(Op operation,
                               std::initializer_list<Pattern> args) {
@@ -92,6 +94,8 @@ public:
   static constexpr RwRule parse(std::string_view search_str,
                                 std::string_view apply_str, Fn parse_op);
 
+  using ApplierGen = std::function<DynamicApplier<Op>(
+      const typename Pattern<Op>::PatternVarMap &)>;
   template <typename ParseFn, typename ApplierGenerator>
     requires std::is_invocable_r_v<Op, ParseFn, std::string_view> &&
              std::is_invocable_r_v<DynamicApplier<Op>, ApplierGenerator,
@@ -202,7 +206,7 @@ Pattern<Op>::parse_internal(std::span<const std::string_view> tokens,
     auto token_str = std::string{token};
     if (var_map.find(token_str) == var_map.end())
       var_map[token_str] = static_cast<std::uint32_t>(var_map.size());
-    return {Var{var_map[token_str]}, {}};
+    return {internal::Var{var_map[token_str]}, {}};
   } else
     return {parse_op(token), {}};
 }
@@ -238,10 +242,8 @@ namespace internal {
 template <Operator Op>
 Id add_pattern(EGraph<Op> &egraph, const typename Pattern<Op>::Node &node,
                std::span<const Id> subst) {
-  if (std::holds_alternative<Var>(node.payload)) {
-    Var v = std::get<Var>(node.payload);
-    return egraph.find(subst[v.val]);
-  }
+  if (auto *var = std::get_if<internal::Var>(&node.payload))
+    return egraph.find(subst[var->val]);
 
   Op op = std::get<Op>(node.payload);
   absl::InlinedVector<Id, 4> arg_ids;

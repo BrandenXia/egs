@@ -24,6 +24,7 @@ public:
   void rebuild();
   Id find(Id id) const;
   std::size_t total_nodes() const;
+  inline internal::EClass<Op> &get_eclass(Id id) { return classes[id.val]; }
 
 private:
   internal::dsu dsu;
@@ -132,14 +133,12 @@ void EGraph<Op>::rebuild() {
     internal::EClass<Op> &eclass = classes[id.val];
 
     for (auto &[node, parent_id] : eclass.parents) {
+      parent_id = find(parent_id);
       hashcons.erase(node);
       for (Id &arg : node.args)
         arg = find(arg);
-      if (auto it = hashcons.find(node); it != hashcons.end()) {
-        Id existing_id = it->second;
-        if (existing_id != parent_id) merge(existing_id, parent_id);
-      } else
-        hashcons.emplace(node, parent_id);
+      auto [it, inserted] = hashcons.try_emplace(node, parent_id);
+      if (!inserted && it->second != parent_id) merge(it->second, parent_id);
     }
   }
 

@@ -21,12 +21,12 @@ struct Id {
   auto operator<=>(const Id &) const = default;
 };
 
+namespace internal {
+
 struct Var {
   std::uint32_t val;
   auto operator<=>(const Var &) const = default;
 };
-
-namespace internal {
 
 template <Operator Op>
 struct ENode {
