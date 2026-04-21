@@ -7,7 +7,7 @@
 #include "egs/pattern.hpp"
 
 struct Expr;
-enum class OpCode { Const, Var, Neg, Deriv, Add, Sub, Mul, Div };
+enum class OpCode { Const, Var, Neg, Deriv, Add, Sub, Mul, Div, Exp };
 
 // clang-format off
 struct Const { int value; };
@@ -36,6 +36,7 @@ Op parse_op(std::string_view str) {
   if (str == "-") return {OpCode::Sub};
   if (str == "*") return {OpCode::Mul};
   if (str == "/") return {OpCode::Div};
+  if (str == "exp") return {OpCode::Exp};
 
   // If it's not one of the above, assume it's a variable or constant
   int val;
@@ -73,9 +74,10 @@ struct Cost {
     if (op.code == OpCode::Const) cost += 1;
     if (op.code == OpCode::Var) cost += 1;
     if (op.code == OpCode::Neg) cost += 5;
-    if (op.code == OpCode::Deriv) cost += 10;
+    if (op.code == OpCode::Deriv) cost += 40;
     if (op.code == OpCode::Add || op.code == OpCode::Sub) cost += 10;
     if (op.code == OpCode::Mul || op.code == OpCode::Div) cost += 15;
+    if (op.code == OpCode::Exp) cost += 20;
     return cost;
   }
 };
@@ -118,6 +120,11 @@ void print_tree(egs::ExtractedTree<Op> tree, int indent = 0) {
     for (const auto &arg : tree.args)
       print_tree(arg, indent + 2);
     break;
+  case OpCode::Exp:
+    std::cout << indent_str << "Exp\n";
+    for (const auto &arg : tree.args)
+      print_tree(arg, indent + 2);
+    break;
   }
 }
 
@@ -129,6 +136,8 @@ auto rules = egs::make_rules<Op>(
       {"(d (* ?x ?y) ?z)", "(+ (* (d ?x ?z) ?y) (* ?x (d ?y ?z)))"},
       {"(d (/ ?x ?y) ?z)",
        "(/ (- (* (d ?x ?z) ?y) (* ?x (d ?y ?z))) (* ?y ?y))"},
+      {"(d (neg ?x) ?z)", "(neg (d ?x ?z))"},
+
       {"(+ ?x 0)", "?x"},
       {"(+ 0 ?x)", "?x"},
       {"(* 1 ?x)", "?x"},
@@ -137,6 +146,12 @@ auto rules = egs::make_rules<Op>(
       {"(* ?x 0)", "0"},
       {"(- ?x 0)", "?x"},
       {"(/ ?x 1)", "?x"},
+      {"(exp ?x 1)", "?x"},
+
+      {"(+ ?x ?y)", "(+ ?y ?x)"},
+      {"(* ?x ?y)", "(* ?y ?x)"},
+      {"(+ (+ ?x ?y) ?z)", "(+ ?x (+ ?y ?z))"},
+      {"(* (* ?x ?y) ?z)", "(* ?x (* ?y ?z))"},
     },
     parse_op);
 
@@ -144,7 +159,13 @@ int main() {
   auto egraph = egs::EGraph<Op>{};
   auto diff_expr = Expr{BinaryOp{
     OpCode::Deriv,
-    new Expr{BinaryOp{OpCode::Mul, new Expr{Var{1}}, new Expr{Var{1}}}},
+    new Expr{BinaryOp{
+      OpCode::Exp,
+      new Expr{BinaryOp{
+        OpCode::Add,
+        new Expr{BinaryOp{OpCode::Mul, new Expr{Var{1}}, new Expr{Const{2}}}},
+        new Expr{Const{3}}}},
+      new Expr{Const{3}}}},
     new Expr{Var{1}}}};
   auto root = egs::add_tree(egraph, diff_expr);
 
@@ -156,14 +177,79 @@ int main() {
 
         return [cidx](egs::EGraph<Op> &eg, const egs::Match<Op> &match) {
           auto c_id = eg.find(match.subst[cidx]);
-          for (const auto &node : eg.get_eclass(c_id).nodes)
-            if (node.op.code == OpCode::Const)
-              return eg.add(Op{OpCode::Const, node.op.val}, {});
+          bool has_const = false;
+          bool has_var = false;
+
+          for (const auto &node : eg.get_eclass(c_id).nodes) {
+            if (node.op.code == OpCode::Const) has_const = true;
+            if (node.op.code == OpCode::Var) has_var = true;
+          }
+
+          if (has_const && !has_var) {
+            return eg.add(Op{OpCode::Const, 0});
+          }
           return match.eclass;
         };
       });
   rules.push_back(const_deriv);
-  egs::run(egraph, {rules});
+  auto power_deriv = R::parse(
+      "(d (exp ?u ?n) ?x)", parse_op, // Notice ?u and ?x are different!
+      [](const egs::Pattern<Op>::PatternVarMap &vars) {
+        auto nidx = vars.at("?n");
+        auto uidx = vars.at("?u");
+        auto xidx = vars.at("?x"); // The variable we are differentiating wrt
+
+        return [nidx, uidx, xidx](egs::EGraph<Op> &eg,
+                                  const egs::Match<Op> &match) {
+          auto n_id = eg.find(match.subst[nidx]);
+
+          for (const auto &node : eg.get_eclass(n_id).nodes) {
+            if (node.op.code == OpCode::Const) {
+              auto u = eg.find(match.subst[uidx]);
+              auto x = eg.find(match.subst[xidx]);
+
+              auto n_minus_one = eg.add(Op{OpCode::Const, node.op.val - 1});
+              auto exp_part = eg.add(Op{OpCode::Exp}, {u, n_minus_one});
+              auto outer_deriv = eg.add(Op{OpCode::Mul}, {n_id, exp_part});
+              auto inner_deriv = eg.add(Op{OpCode::Deriv}, {u, x});
+              return eg.add(Op{OpCode::Mul}, {outer_deriv, inner_deriv});
+            }
+          }
+          return match.eclass;
+        };
+      });
+  rules.push_back(power_deriv);
+  auto fold_const_mul = R::parse(
+      "(* ?a ?b)", parse_op, [](const egs::Pattern<Op>::PatternVarMap &vars) {
+        auto aidx = vars.at("?a");
+        auto bidx = vars.at("?b");
+
+        return [aidx, bidx](egs::EGraph<Op> &eg, const egs::Match<Op> &match) {
+          auto a_id = eg.find(match.subst[aidx]);
+          auto b_id = eg.find(match.subst[bidx]);
+
+          std::optional<int> a_val;
+          std::optional<int> b_val;
+
+          for (const auto &node : eg.get_eclass(a_id).nodes)
+            if (node.op.code == OpCode::Const) a_val = node.op.val;
+          for (const auto &node : eg.get_eclass(b_id).nodes)
+            if (node.op.code == OpCode::Const) b_val = node.op.val;
+
+          if (a_val && b_val)
+            return eg.add(Op{OpCode::Const, (*a_val) * (*b_val)});
+          return match.eclass;
+        };
+      });
+  rules.push_back(fold_const_mul);
+
+  auto stop_reason = egs::run(egraph, {rules});
+  switch (stop_reason) {
+  case egs::StopReason::Saturated: std::cout << "Saturated\n"; break;
+  case egs::StopReason::IterationLimit:
+    std::cout << "Iteration limit reached\n";
+  case egs::StopReason::NodeLimit: std::cout << "Node limit reached\n"; break;
+  }
 
   auto extractor = egs::Extractor{egraph, Cost{}, UINT32_MAX};
   auto best = extractor.extract(root, egraph);

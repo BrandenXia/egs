@@ -3,8 +3,8 @@
 
 #include <concepts>
 #include <cstddef>
+#include <initializer_list>
 #include <iterator>
-#include <span>
 #include <vector>
 
 #include <absl/container/flat_hash_map.h>
@@ -21,6 +21,7 @@ template <Operator Op>
 struct EGraph {
 public:
   Id add(Op op, std::span<Id> args);
+  Id add(Op op, std::initializer_list<Id> args = {});
   bool merge(Id a, Id b);
   void rebuild();
   Id find(Id id) const;
@@ -104,6 +105,12 @@ Id EGraph<Op>::add(Op op, std::span<Id> args) {
 }
 
 template <Operator Op>
+Id EGraph<Op>::add(Op op, std::initializer_list<Id> args) {
+  auto temp = std::vector<Id>{args};
+  return add(op, temp);
+}
+
+template <Operator Op>
 bool EGraph<Op>::merge(Id a, Id b) {
   a = find(a), b = find(b);
   if (a == b) return false;
@@ -135,11 +142,23 @@ void EGraph<Op>::rebuild() {
 
     for (auto &[node, parent_id] : eclass.parents) {
       parent_id = find(parent_id);
-      hashcons.erase(node);
-      for (Id &arg : node.args)
-        arg = find(arg);
-      auto [it, inserted] = hashcons.try_emplace(node, parent_id);
-      if (!inserted && it->second != parent_id) merge(it->second, parent_id);
+
+      auto canonical = node;
+      bool changed = false;
+      for (Id &arg : canonical.args) {
+        Id canon = find(arg);
+        if (canon != arg) {
+          arg = canon;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        hashcons.erase(node); // remove stale key only when necessary
+        auto [it, inserted] = hashcons.try_emplace(canonical, parent_id);
+        if (!inserted && it->second != parent_id) merge(it->second, parent_id);
+      } else
+        hashcons[node] = parent_id;
     }
   }
 

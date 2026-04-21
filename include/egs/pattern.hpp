@@ -65,8 +65,8 @@ template <Operator Op>
 using DynamicApplier = std::function<Id(EGraph<Op> &, const Match<Op> &)>;
 
 struct RunConfig {
-  int max_iterations = 100;
-  size_t node_limit = 100000;
+  int max_iterations = 30;
+  std::size_t node_limit = 10000;
 };
 
 enum class StopReason {
