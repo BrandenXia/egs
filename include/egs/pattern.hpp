@@ -275,6 +275,7 @@ Id add_pattern(EGraph<Op> &egraph, const typename Pattern<Op>::Node &node,
 
   Op op = std::get<Op>(node.payload);
   absl::InlinedVector<Id, 4> arg_ids;
+  arg_ids.reserve(node.args.size());
   for (const auto &arg : node.args)
     arg_ids.push_back(add_pattern(egraph, arg, subst));
 
