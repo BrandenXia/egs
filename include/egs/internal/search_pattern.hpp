@@ -85,70 +85,77 @@ std::vector<Match<Op>> search_relational(const EGraph<Op> &egraph,
                                          const std::vector<Reg> &var_regs) {
   std::vector<Match<Op>> results;
   results.reserve(16);
+
+  using TableType =
+      std::remove_reference_t<decltype(egraph.op_index.begin()->second)>;
+  std::vector<const TableType *> resolved_tables(program.size(), nullptr);
+  for (size_t i = 0; i < program.size(); ++i)
+    if (program[i].type == Inst<Op>::LookUpOp) {
+      auto it = egraph.op_index.find(program[i].op);
+      if (it != egraph.op_index.end() && !it->second.empty())
+        resolved_tables[i] = &it->second;
+    }
+
   std::vector<MachineState<Op>> stack;
   stack.reserve(program.size() * 2);
-
   stack.push_back(MachineState<Op>{});
 
   while (!stack.empty()) {
-    auto state = std::move(stack.back());
-    stack.pop_back();
+    auto &state = stack.back();
 
     if (state.pc == program.size()) {
       Match<Op> match;
       match.eclass = state.id_regs[root_eclass_reg];
 
+      match.subst.reserve(var_regs.size());
       for (Reg r : var_regs)
         match.subst.push_back(state.id_regs[r]);
 
       results.push_back(std::move(match));
+      stack.pop_back();
       continue;
     }
 
     const auto &inst = program[state.pc];
     switch (inst.type) {
     case Inst<Op>::LookUpOp: {
-      auto it = egraph.op_index.find(inst.op);
-      if (it == egraph.op_index.end() || it->second.empty()) break;
+      const auto *table_ptr = resolved_tables[state.pc];
 
-      const auto &table = it->second;
-      if (state.table_iter_idx + 1 < table.size()) {
-        MachineState<Op> new_state = state;
-        new_state.table_iter_idx++;
-        stack.push_back(std::move(new_state));
+      if (!table_ptr || state.table_iter_idx >= table_ptr->size()) {
+        stack.pop_back();
+        break;
       }
 
-      const auto &[elass_id, node] = table[state.table_iter_idx];
+      const auto &[eclass_id, node] = (*table_ptr)[state.table_iter_idx];
 
-      MachineState<Op> new_state = state;
-      new_state.id_regs[inst.out_eclass_reg] = elass_id;
-      new_state.node_regs[inst.out_node_reg] = &node;
+      state.table_iter_idx++;
 
-      new_state.pc++;
-      new_state.table_iter_idx = 0;
-      stack.push_back(std::move(new_state));
+      MachineState<Op> child_state = state;
+      child_state.id_regs[inst.out_eclass_reg] = eclass_id;
+      child_state.node_regs[inst.out_node_reg] = &node;
+      child_state.pc++;
+      child_state.table_iter_idx = 0;
+
+      stack.push_back(std::move(child_state));
       break;
     }
     case Inst<Op>::BindArg: {
       const internal::ENode<Op> *node = state.node_regs[inst.in_node_reg];
       Id arg_eclass = egraph.find(node->args[inst.child_idx]);
 
-      MachineState<Op> new_state = state;
-      new_state.id_regs[inst.out_eclass_reg] = arg_eclass;
-
-      new_state.pc++;
-      stack.push_back(std::move(new_state));
+      state.id_regs[inst.out_eclass_reg] = arg_eclass;
+      state.pc++;
       break;
     }
     case Inst<Op>::Compare: {
       Id id1 = state.id_regs[inst.out_eclass_reg];
       Id id2 = state.id_regs[inst.in_eclass_reg];
 
-      if (id1 != id2) break;
+      if (id1 != id2)
+        stack.pop_back();
+      else
+        state.pc++;
 
-      MachineState<Op> new_state = state;
-      new_state.pc++;
-      stack.push_back(std::move(new_state));
       break;
     }
     }
