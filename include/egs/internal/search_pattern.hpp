@@ -84,12 +84,14 @@ std::vector<Match<Op>> search_relational(const EGraph<Op> &egraph,
                                          Reg root_eclass_reg,
                                          const std::vector<Reg> &var_regs) {
   std::vector<Match<Op>> results;
+  results.reserve(16);
   std::vector<MachineState<Op>> stack;
+  stack.reserve(program.size() * 2);
 
   stack.push_back(MachineState<Op>{});
 
   while (!stack.empty()) {
-    auto state = stack.back();
+    auto state = std::move(stack.back());
     stack.pop_back();
 
     if (state.pc == program.size()) {
