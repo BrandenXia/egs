@@ -17,19 +17,24 @@ absl_flat_hash_map = dependency(
   required : true
 )
 
+absl_flat_hash_set = dependency(
+  'absl_flat_hash_set',
+  required : true
+)
+
 egs_lib = both_libraries(
   'egs',
   'src/egs.cpp',
   'src/internal/dsu.cpp',
   include_directories : inc,
-  dependencies : [absl_inlined_vector, absl_flat_hash_map],
+  dependencies : [absl_inlined_vector, absl_flat_hash_map, absl_flat_hash_set],
   install : true
 )
 
 egs_dep = declare_dependency(
   link_with : egs_lib,
   include_directories : inc,
-  dependencies : [absl_inlined_vector, absl_flat_hash_map]
+  dependencies : [absl_inlined_vector, absl_flat_hash_map, absl_flat_hash_set],
 )
 
 subdir('test')

@@ -5,10 +5,10 @@
 #include <cstddef>
 #include <initializer_list>
 #include <iterator>
-#include <unordered_set>
 #include <vector>
 
 #include <absl/container/flat_hash_map.h>
+#include <absl/container/flat_hash_set.h>
 #include <absl/container/inlined_vector.h>
 
 #include "egs/extract.hpp"
@@ -34,7 +34,7 @@ private:
   absl::flat_hash_map<internal::ENode<Op>, Id> hashcons;
   std::vector<internal::EClass<Op>> classes;
   std::vector<Id> worklist;
-  std::unordered_set<Id> workset;
+  absl::flat_hash_set<Id> workset;
   absl::flat_hash_map<Op, std::vector<std::pair<Id, internal::ENode<Op>>>>
       op_index;
 
