@@ -50,6 +50,13 @@ struct EClass {
 
 } // namespace egs
 
+template <>
+struct std::hash<egs::Id> {
+  std::size_t operator()(const egs::Id &id) const {
+    return std::hash<std::uint32_t>{}(id.val);
+  }
+};
+
 template <egs::Operator Op>
 struct std::hash<egs::internal::ENode<Op>> {
   std::size_t operator()(const egs::internal::ENode<Op> &node) const {

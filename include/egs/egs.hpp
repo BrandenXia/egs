@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <initializer_list>
 #include <iterator>
+#include <unordered_set>
 #include <vector>
 
 #include <absl/container/flat_hash_map.h>
@@ -33,8 +34,14 @@ private:
   absl::flat_hash_map<internal::ENode<Op>, Id> hashcons;
   std::vector<internal::EClass<Op>> classes;
   std::vector<Id> worklist;
+  std::unordered_set<Id> workset;
   absl::flat_hash_map<Op, std::vector<std::pair<Id, internal::ENode<Op>>>>
       op_index;
+
+  inline void push_work(Id id, bool skip_find = false) {
+    if (!skip_find) id = find(id);
+    if (workset.insert(id).second) worklist.push_back(id);
+  }
 
   friend std::vector<Match<Op>>
   internal::search_relational(const EGraph<Op> &egraph,
@@ -128,7 +135,7 @@ bool EGraph<Op>::merge(Id a, Id b) {
   old_class.nodes.clear();
   old_class.parents.clear();
 
-  worklist.push_back(nid);
+  push_work(nid, true);
 
   return true;
 }
@@ -138,6 +145,8 @@ void EGraph<Op>::rebuild() {
   while (!worklist.empty()) {
     Id id = worklist.back();
     worklist.pop_back();
+    workset.erase(id);
+
     internal::EClass<Op> &eclass = classes[id.val];
 
     for (auto &[node, parent_id] : eclass.parents) {
