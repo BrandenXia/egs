@@ -23,6 +23,8 @@ namespace egs {
 template <Operator Op>
 struct EGraph;
 
+using PatternVarMap = std::unordered_map<std::string, std::uint32_t>;
+
 template <Operator Op>
 struct Pattern {
   struct Node {
@@ -43,8 +45,6 @@ struct Pattern {
       n.args.push_back(arg.root);
     return {n};
   }
-
-  using PatternVarMap = std::unordered_map<std::string, std::uint32_t>;
 
   template <typename Fn>
     requires std::is_invocable_r_v<Op, Fn, std::string_view>
@@ -97,15 +97,15 @@ public:
 
   template <typename Fn>
     requires std::is_invocable_r_v<Op, Fn, std::string_view>
-  static constexpr RwRule parse(std::string_view search_str,
-                                std::string_view apply_str, Fn parse_op);
+  static RwRule parse(std::string_view search_str, std::string_view apply_str,
+                      Fn parse_op);
 
   template <typename ParseFn, typename ApplierGenerator>
     requires std::is_invocable_r_v<Op, ParseFn, std::string_view> &&
              std::is_invocable_r_v<DynamicApplier<Op>, ApplierGenerator,
-                                   const typename Pattern<Op>::PatternVarMap &>
-  static constexpr RwRule parse(std::string_view search_str, ParseFn parse_op,
-                                ApplierGenerator applier_gen);
+                                   const PatternVarMap &>
+  static RwRule parse(std::string_view search_str, ParseFn parse_op,
+                      ApplierGenerator applier_gen);
 
 private:
   std::optional<std::string> name;
@@ -118,30 +118,6 @@ private:
                             std::span<const RwRule<Op>> rules,
                             RunConfig config);
 };
-
-template <Operator Op>
-constexpr std::vector<RwRule<Op>>
-make_rules(std::initializer_list<std::pair<std::string_view, std::string_view>>
-               rule_strs,
-           auto parse_op) {
-  auto rules = std::vector<RwRule<Op>>{};
-  for (const auto &[lhs, rhs] : rule_strs)
-    rules.push_back(RwRule<Op>::parse(lhs, rhs, parse_op));
-  return rules;
-}
-
-template <Operator Op>
-constexpr std::vector<RwRule<Op>> make_rules(
-    std::initializer_list<std::pair<
-        std::string_view, std::function<DynamicApplier<Op>(
-                              const typename Pattern<Op>::PaternVarMap &)>>>
-        rule_strs,
-    auto parse_op) {
-  auto rules = std::vector<RwRule<Op>>{};
-  for (const auto &[lhs, rhs] : rule_strs)
-    rules.push_back(RwRule<Op>::parse(lhs, rhs, parse_op));
-  return rules;
-}
 
 template <Operator Op>
 struct Match {
@@ -242,10 +218,9 @@ Pattern<Op>::parse_internal(std::span<const std::string_view> tokens,
 template <Operator Op>
 template <typename Fn>
   requires std::is_invocable_r_v<Op, Fn, std::string_view>
-constexpr RwRule<Op> RwRule<Op>::parse(std::string_view search_str,
-                                       std::string_view apply_str,
-                                       Fn parse_op) {
-  auto shared_vars = typename Pattern<Op>::PatternVarMap{};
+RwRule<Op> RwRule<Op>::parse(std::string_view search_str,
+                             std::string_view apply_str, Fn parse_op) {
+  auto shared_vars = PatternVarMap{};
   auto searcher = Pattern<Op>::parse(search_str, parse_op, shared_vars);
   auto applier = Pattern<Op>::parse(apply_str, parse_op, shared_vars);
   return {searcher, applier};
@@ -255,11 +230,10 @@ template <Operator Op>
 template <typename ParseFn, typename ApplierGenerator>
   requires std::is_invocable_r_v<Op, ParseFn, std::string_view> &&
            std::is_invocable_r_v<DynamicApplier<Op>, ApplierGenerator,
-                                 const typename Pattern<Op>::PatternVarMap &>
-constexpr RwRule<Op> RwRule<Op>::parse(std::string_view search_str,
-                                       ParseFn parse_op,
-                                       ApplierGenerator applier_gen) {
-  auto shared_vars = typename Pattern<Op>::PatternVarMap{};
+                                 const PatternVarMap &>
+RwRule<Op> RwRule<Op>::parse(std::string_view search_str, ParseFn parse_op,
+                             ApplierGenerator applier_gen) {
+  auto shared_vars = PatternVarMap{};
   auto searcher = Pattern<Op>::parse(search_str, parse_op, shared_vars);
   auto applier = applier_gen(shared_vars);
   return {searcher, applier};

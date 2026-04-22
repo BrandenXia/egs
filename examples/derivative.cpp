@@ -5,6 +5,7 @@
 #include "egs/egs.hpp"
 #include "egs/extract.hpp"
 #include "egs/pattern.hpp"
+#include "egs/utils.hpp"
 
 struct Expr;
 enum class OpCode { Const, Var, Neg, Deriv, Add, Sub, Mul, Div, Exp };
@@ -171,12 +172,12 @@ int main() {
 
   using R = egs::RwRule<Op>;
 
-  auto const_deriv = R::parse(
-      "(d ?c ?x)", parse_op, [](const egs::Pattern<Op>::PatternVarMap &vars) {
-        auto cidx = vars.at("?c");
+  auto const_deriv =
+      R::parse("(d ?c ?x)", parse_op, [](const egs::PatternVarMap &vars) {
+        auto [cidx] = egs::get_pattern_vars(vars, "?c");
 
         return [cidx](egs::EGraph<Op> &eg, const egs::Match<Op> &match) {
-          auto c_id = eg.find(match.subst[cidx]);
+          auto c_id = egs::get_match_id(eg, match, cidx);
           bool has_const = false;
           bool has_var = false;
 
@@ -194,23 +195,20 @@ int main() {
   rules.push_back(const_deriv);
   auto power_deriv = R::parse(
       "(d (exp ?u ?n) ?x)", parse_op, // Notice ?u and ?x are different!
-      [](const egs::Pattern<Op>::PatternVarMap &vars) {
-        auto nidx = vars.at("?n");
-        auto uidx = vars.at("?u");
-        auto xidx = vars.at("?x"); // The variable we are differentiating wrt
+      [](const egs::PatternVarMap &vars) {
+        auto [nidx, uidx, xidx] = egs::get_pattern_vars(vars, "?n", "?u", "?x");
 
         return [nidx, uidx, xidx](egs::EGraph<Op> &eg,
                                   const egs::Match<Op> &match) {
-          auto n_id = eg.find(match.subst[nidx]);
+          auto n = egs::get_match_id(eg, match, nidx);
 
-          for (const auto &node : eg.get_eclass(n_id).nodes) {
+          for (const auto &node : eg.get_eclass(n).nodes) {
             if (node.op.code == OpCode::Const) {
-              auto u = eg.find(match.subst[uidx]);
-              auto x = eg.find(match.subst[xidx]);
+              auto [u, x] = egs::get_match_ids(eg, match, uidx, xidx);
 
               auto n_minus_one = eg.add(Op{OpCode::Const, node.op.val - 1});
               auto exp_part = eg.add(Op{OpCode::Exp}, {u, n_minus_one});
-              auto outer_deriv = eg.add(Op{OpCode::Mul}, {n_id, exp_part});
+              auto outer_deriv = eg.add(Op{OpCode::Mul}, {n, exp_part});
               auto inner_deriv = eg.add(Op{OpCode::Deriv}, {u, x});
               return eg.add(Op{OpCode::Mul}, {outer_deriv, inner_deriv});
             }
@@ -219,14 +217,12 @@ int main() {
         };
       });
   rules.push_back(power_deriv);
-  auto fold_const_mul = R::parse(
-      "(* ?a ?b)", parse_op, [](const egs::Pattern<Op>::PatternVarMap &vars) {
-        auto aidx = vars.at("?a");
-        auto bidx = vars.at("?b");
+  auto fold_const_mul =
+      R::parse("(* ?a ?b)", parse_op, [](const egs::PatternVarMap &vars) {
+        auto [aidx, bidx] = egs::get_pattern_vars(vars, "?a", "?b");
 
         return [aidx, bidx](egs::EGraph<Op> &eg, const egs::Match<Op> &match) {
-          auto a_id = eg.find(match.subst[aidx]);
-          auto b_id = eg.find(match.subst[bidx]);
+          auto [a_id, b_id] = egs::get_match_ids(eg, match, aidx, bidx);
 
           std::optional<int> a_val;
           std::optional<int> b_val;
