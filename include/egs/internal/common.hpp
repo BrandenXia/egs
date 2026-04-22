@@ -32,7 +32,7 @@ struct Var {
 template <Operator Op>
 struct ENode {
   Op op;
-  absl::InlinedVector<Id, 2> args;
+  absl::InlinedVector<Id, 4> args;
   bool operator==(const ENode &) const = default;
 };
 

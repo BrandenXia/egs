@@ -21,7 +21,7 @@ namespace egs {
 template <Operator Op>
 struct EGraph {
 public:
-  Id add(Op op, std::span<Id> args);
+  Id add(Op op, decltype(internal::ENode<Op>::args) args);
   Id add(Op op, std::initializer_list<Id> args = {});
   bool merge(Id a, Id b);
   void rebuild();
@@ -84,23 +84,22 @@ template <Operator Op, typename UserAST>
 Id add_tree(EGraph<Op> &egraph, const UserAST &ast) {
   using Traits = EGraphTraits<UserAST>;
 
-  absl::InlinedVector<Id, 2> arg_ids;
+  decltype(internal::ENode<Op>::args) arg_ids;
   for (const auto &arg : Traits::get_args(ast))
     arg_ids.push_back(add_tree(egraph, *arg));
   return egraph.add(Traits::get_op(ast), arg_ids);
 }
 
 template <Operator Op>
-Id EGraph<Op>::add(Op op, std::span<Id> args) {
+Id EGraph<Op>::add(Op op, decltype(internal::ENode<Op>::args) args) {
   for (Id arg : args)
     arg = find(arg);
 
-  if (auto it = hashcons.find({op, {args.begin(), args.end()}});
-      it != hashcons.end())
-    return it->second;
+  const auto node = internal::ENode<Op>{op, args};
+
+  if (auto it = hashcons.find(node); it != hashcons.end()) return it->second;
 
   Id id = dsu.make_set();
-  internal::ENode<Op> node{op, {args.begin(), args.end()}};
   classes.emplace_back(id, decltype(internal::EClass<Op>::nodes){node},
                        decltype(internal::EClass<Op>::parents){});
   hashcons.emplace(node, id);
@@ -113,8 +112,7 @@ Id EGraph<Op>::add(Op op, std::span<Id> args) {
 
 template <Operator Op>
 Id EGraph<Op>::add(Op op, std::initializer_list<Id> args) {
-  auto temp = std::vector<Id>{args};
-  return add(op, temp);
+  return add(op, decltype(internal::ENode<Op>::args){args});
 }
 
 template <Operator Op>
