@@ -100,12 +100,13 @@ Id EGraph<Op>::add(Op op, decltype(internal::ENode<Op>::args) args) {
   if (auto it = hashcons.find(node); it != hashcons.end()) return it->second;
 
   Id id = dsu.make_set();
-  classes.emplace_back(id, decltype(internal::EClass<Op>::nodes){node},
-                       decltype(internal::EClass<Op>::parents){});
-  hashcons.emplace(node, id);
 
   for (Id arg : args)
-    classes[find(arg).val].parents.emplace_back(node, id);
+    classes[arg.val].parents.emplace_back(node, id);
+
+  classes.emplace_back(id, decltype(internal::EClass<Op>::nodes){node},
+                       decltype(internal::EClass<Op>::parents){});
+  hashcons.emplace(std::move(node), id);
 
   return id;
 }
