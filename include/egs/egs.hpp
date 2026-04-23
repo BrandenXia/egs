@@ -25,7 +25,7 @@ public:
   Id add(Op op, std::initializer_list<Id> args = {});
   bool merge(Id a, Id b);
   void rebuild();
-  Id find(Id id) const;
+  inline Id find(Id id) const;
   std::size_t total_nodes() const;
   inline internal::EClass<Op> &get_eclass(Id id) { return classes[id.val]; }
 
@@ -181,7 +181,7 @@ void EGraph<Op>::rebuild() {
 }
 
 template <Operator Op>
-Id EGraph<Op>::find(Id id) const {
+inline Id EGraph<Op>::find(Id id) const {
   return dsu.find(id);
 }
 
