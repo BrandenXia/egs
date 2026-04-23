@@ -189,6 +189,7 @@ int main() {
           egs::for_each_node(eg, c_id, [&](const Op &op) {
             if (op.code == OpCode::Const) has_const = true;
             if (op.code == OpCode::Var) has_var = true;
+            if (has_const && has_var) return egs::ControlFlow::Break;
             return egs::ControlFlow::Continue;
           });
 
