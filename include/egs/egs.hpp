@@ -29,6 +29,8 @@ public:
   std::size_t total_nodes() const;
   inline internal::EClass<Op> &get_eclass(Id id) { return classes[id.val]; }
 
+  using op_type = Op;
+
 private:
   internal::dsu dsu;
   absl::flat_hash_map<internal::ENode<Op>, Id> hashcons;

@@ -1,5 +1,6 @@
 #include <functional>
 #include <iostream>
+#include <system_error>
 #include <variant>
 
 #include "egs/egs.hpp"
@@ -72,13 +73,17 @@ struct Cost {
     auto cost = std::uint32_t(1);
     for (auto c : arg_costs)
       cost += c;
-    if (op.code == OpCode::Const) cost += 1;
-    if (op.code == OpCode::Var) cost += 1;
-    if (op.code == OpCode::Neg) cost += 5;
-    if (op.code == OpCode::Deriv) cost += 40;
-    if (op.code == OpCode::Add || op.code == OpCode::Sub) cost += 10;
-    if (op.code == OpCode::Mul || op.code == OpCode::Div) cost += 15;
-    if (op.code == OpCode::Exp) cost += 20;
+    switch (op.code) {
+    case OpCode::Const: cost += 1; break;
+    case OpCode::Var: cost += 1; break;
+    case OpCode::Neg: cost += 5; break;
+    case OpCode::Deriv: cost += 40; break;
+    case OpCode::Add:
+    case OpCode::Sub: cost += 10; break;
+    case OpCode::Mul:
+    case OpCode::Div: cost += 15; break;
+    case OpCode::Exp: cost += 20; break;
+    }
     return cost;
   }
 };
@@ -181,10 +186,11 @@ int main() {
           bool has_const = false;
           bool has_var = false;
 
-          for (const auto &node : eg.get_eclass(c_id).nodes) {
-            if (node.op.code == OpCode::Const) has_const = true;
-            if (node.op.code == OpCode::Var) has_var = true;
-          }
+          egs::for_each_node(eg, c_id, [&](const Op &op) {
+            if (op.code == OpCode::Const) has_const = true;
+            if (op.code == OpCode::Var) has_var = true;
+            return egs::ControlFlow::Continue;
+          });
 
           if (has_const && !has_var) {
             return eg.add(Op{OpCode::Const, 0});
@@ -201,18 +207,22 @@ int main() {
         return [nidx, uidx, xidx](egs::EGraph<Op> &eg,
                                   const egs::Match<Op> &match) {
           auto n = egs::get_match_id(eg, match, nidx);
+          auto n_val =
+              egs::find_in_eclass(eg, n, [](Op op) -> std::optional<int> {
+                if (op.code == OpCode::Const) return op.val;
+                return std::nullopt;
+              });
 
-          for (const auto &node : eg.get_eclass(n).nodes) {
-            if (node.op.code == OpCode::Const) {
-              auto [u, x] = egs::get_match_ids(eg, match, uidx, xidx);
+          if (n_val) {
+            auto [u, x] = egs::get_match_ids(eg, match, uidx, xidx);
 
-              auto n_minus_one = eg.add(Op{OpCode::Const, node.op.val - 1});
-              auto exp_part = eg.add(Op{OpCode::Exp}, {u, n_minus_one});
-              auto outer_deriv = eg.add(Op{OpCode::Mul}, {n, exp_part});
-              auto inner_deriv = eg.add(Op{OpCode::Deriv}, {u, x});
-              return eg.add(Op{OpCode::Mul}, {outer_deriv, inner_deriv});
-            }
+            auto n_minus_one = eg.add(Op{OpCode::Const, *n_val - 1});
+            auto exp_part = eg.add(Op{OpCode::Exp}, {u, n_minus_one});
+            auto outer_deriv = eg.add(Op{OpCode::Mul}, {n, exp_part});
+            auto inner_deriv = eg.add(Op{OpCode::Deriv}, {u, x});
+            return eg.add(Op{OpCode::Mul}, {outer_deriv, inner_deriv});
           }
+
           return match.eclass;
         };
       });
@@ -224,13 +234,13 @@ int main() {
         return [aidx, bidx](egs::EGraph<Op> &eg, const egs::Match<Op> &match) {
           auto [a_id, b_id] = egs::get_match_ids(eg, match, aidx, bidx);
 
-          std::optional<int> a_val;
-          std::optional<int> b_val;
+          auto get_const = [](Op op) -> std::optional<int> {
+            if (op.code == OpCode::Const) return op.val;
+            return std::nullopt;
+          };
 
-          for (const auto &node : eg.get_eclass(a_id).nodes)
-            if (node.op.code == OpCode::Const) a_val = node.op.val;
-          for (const auto &node : eg.get_eclass(b_id).nodes)
-            if (node.op.code == OpCode::Const) b_val = node.op.val;
+          auto a_val = egs::find_in_eclass(eg, a_id, get_const);
+          auto b_val = egs::find_in_eclass(eg, b_id, get_const);
 
           if (a_val && b_val)
             return eg.add(Op{OpCode::Const, (*a_val) * (*b_val)});

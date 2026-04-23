@@ -1,10 +1,34 @@
 #ifndef EGS_UTILS_HPP
 #define EGS_UTILS_HPP
 
+#include <array>
+#include <cstddef>
+#include <functional>
+#include <initializer_list>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
 #include "egs/internal/common.hpp"
+#include "egs/internal/utils.hpp"
 #include "egs/pattern.hpp"
 
 namespace egs {
+
+namespace internal {
+
+template <typename Eg, typename Getter, typename... Args>
+struct invokable_with_eg_op;
+
+template <typename Eg, typename Getter, typename... Args>
+constexpr bool invokable_with_eg_op_v =
+    invokable_with_eg_op<Eg, Getter, Args...>::value_type;
+
+} // namespace internal
+
+using internal::utils::IsEGraph;
 
 template <Operator Op>
 constexpr std::vector<RwRule<Op>>
@@ -37,9 +61,49 @@ template <typename... Args>
 inline constexpr auto get_match_ids(auto &eg, const auto &match,
                                     Args &&...args);
 
+enum class ControlFlow { Continue, Break };
+
+// side-effect scan with optional early break, `fn` should return `ControlFlow`
+inline constexpr auto for_each_node(IsEGraph auto &eg, Id id, auto &&fn)
+  requires(internal::invokable_with_eg_op_v<decltype(eg), decltype(fn)> &&
+           std::is_same_v<typename internal::invokable_with_eg_op<
+                              decltype(eg), decltype(fn)>::return_type,
+                          ControlFlow>);
+
+// extract first matching rule, `getter` should return std::optional
+inline constexpr auto find_in_eclass(IsEGraph auto &eg, Id id, auto &&getter)
+  requires(
+      internal::invokable_with_eg_op_v<decltype(eg), decltype(getter)> &&
+      internal::utils::is_optional_v<typename internal::invokable_with_eg_op<
+          decltype(eg), decltype(getter)>::return_type>);
+
+// fold over all nodes in an eclass, `fn` should return the same type as `init`
+inline constexpr auto fold_eclass(IsEGraph auto &eg, Id id, auto &&init,
+                                  auto &&fn)
+  requires(internal::invokable_with_eg_op_v<decltype(eg), decltype(fn),
+                                            decltype(init)> &&
+           std::is_same_v<
+               typename internal::invokable_with_eg_op<
+                   decltype(eg), decltype(fn), decltype(init)>::return_type,
+               decltype(init)>);
+
 } // namespace egs
 
 namespace egs {
+
+namespace internal {
+
+template <typename Eg, typename Getter, typename... Args>
+struct invokable_with_eg_op {
+  using Op = typename std::remove_cvref_t<Eg>::op_type;
+  using invoke_with_t =
+      std::conditional_t<sizeof(Op) <= sizeof(std::size_t), Op, const Op &>;
+  static constexpr bool value_type =
+      std::is_invocable_v<Getter, invoke_with_t, Args...>;
+  using return_type = std::invoke_result_t<Getter, invoke_with_t, Args...>;
+};
+
+} // namespace internal
 
 template <Operator Op>
 constexpr std::vector<RwRule<Op>>
@@ -88,6 +152,43 @@ template <typename... Args>
 inline constexpr auto get_pattern_vars(const PatternVarMap &vars,
                                        Args &&...args) {
   return std::to_array({get_pattern_var(vars, args)...});
+}
+
+inline constexpr auto for_each_node(IsEGraph auto &eg, Id id, auto &&fn)
+  requires(internal::invokable_with_eg_op_v<decltype(eg), decltype(fn)> &&
+           std::is_same_v<typename internal::invokable_with_eg_op<
+                              decltype(eg), decltype(fn)>::return_type,
+                          ControlFlow>)
+{
+  for (const auto &node : eg.get_eclass(id).nodes)
+    if (fn(node.op) == ControlFlow::Break) break;
+}
+
+inline constexpr auto find_in_eclass(IsEGraph auto &eg, Id id, auto &&getter)
+  requires(
+      internal::invokable_with_eg_op_v<decltype(eg), decltype(getter)> &&
+      internal::utils::is_optional_v<typename internal::invokable_with_eg_op<
+          decltype(eg), decltype(getter)>::return_type>)
+{
+  for (const auto &node : eg.get_eclass(id).nodes)
+    if (auto val = getter(node.op)) return val;
+  return
+      typename internal::invokable_with_eg_op<decltype(eg),
+                                              decltype(getter)>::return_type{};
+}
+
+inline constexpr auto fold_eclass(IsEGraph auto &eg, Id id, auto &&init,
+                                  auto &&fn)
+  requires(internal::invokable_with_eg_op_v<decltype(eg), decltype(fn),
+                                            decltype(init)> &&
+           std::is_same_v<
+               typename internal::invokable_with_eg_op<
+                   decltype(eg), decltype(fn), decltype(init)>::return_type,
+               decltype(init)>)
+{
+  for (const auto &node : eg.get_eclass(id).nodes)
+    init = fn(node.op, std::move(init));
+  return init;
 }
 
 } // namespace egs
