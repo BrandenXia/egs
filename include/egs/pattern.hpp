@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <functional>
 #include <initializer_list>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string_view>
@@ -61,8 +62,16 @@ private:
                                        PatternVarMap &var_map);
 };
 
+inline constexpr struct no_rewrite_t {
+} no_rewrite;
+struct RwResult {
+  std::optional<Id> id;
+  RwResult(Id i) : id(i) {}
+  RwResult(no_rewrite_t) : id(std::nullopt) {}
+};
+
 template <Operator Op>
-using DynamicApplier = std::function<Id(EGraph<Op> &, const Match<Op> &)>;
+using DynamicApplier = std::function<RwResult(EGraph<Op> &, const Match<Op> &)>;
 
 struct RunConfig {
   int max_iterations = 30;
@@ -293,7 +302,7 @@ StopReason run(EGraph<Op> &egraph, std::span<const RwRule<Op>> rules,
               if constexpr (std::is_same_v<T, Pattern<Op>>)
                 return internal::add_pattern(egraph, applier, match.subst);
               else
-                return applier(egraph, match);
+                return applier(egraph, match).id.value_or(match.eclass);
             },
             rule->applier);
 

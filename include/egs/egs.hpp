@@ -131,6 +131,7 @@ Id EGraph<Op>::add(Op op, auto... args)
 
 template <Operator Op>
 bool EGraph<Op>::merge(Id a, Id b) {
+  if (a == b) return false;
   a = find(a), b = find(b);
   if (a == b) return false;
 
