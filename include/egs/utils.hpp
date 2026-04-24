@@ -87,6 +87,9 @@ inline constexpr auto fold_eclass(IsEGraph auto &eg, Id id, auto &&init,
                    decltype(eg), decltype(fn), decltype(init)>::return_type,
                decltype(init)>);
 
+inline constexpr auto bind(auto &&...args)
+  requires(internal::utils::all_but_last_are_strings<decltype(args)...>());
+
 } // namespace egs
 
 namespace egs {
@@ -189,6 +192,45 @@ inline constexpr auto fold_eclass(IsEGraph auto &eg, Id id, auto &&init,
   for (const auto &node : eg.get_eclass(id).nodes)
     init = fn(node.op, std::move(init));
   return init;
+}
+
+inline constexpr auto bind(auto &&...all_args)
+  requires(internal::utils::all_but_last_are_strings<decltype(all_args)...>())
+{
+  constexpr std::size_t N = sizeof...(all_args);
+  auto tuple_args =
+      std::make_tuple(std::forward<decltype(all_args)>(all_args)...);
+  auto fn = std::move(std::get<N - 1>(tuple_args));
+  auto arg_names =
+      [&]<std::size_t... Is>(std::index_sequence<Is...>) constexpr {
+        return std::array<std::string, N - 1>{
+          std::move(std::get<Is>(tuple_args))...};
+      }(std::make_index_sequence<N - 1>{});
+
+  return [fn = std::move(fn),
+          arg_names = std::move(arg_names)](const PatternVarMap &vars) {
+    auto arg_ids = std::apply(
+        [&vars](const auto &...names) constexpr {
+          return get_pattern_vars(vars, names...);
+        },
+        arg_names);
+
+    return [fn, arg_ids = std::move(arg_ids)](auto &eg,
+                                              const auto &match) constexpr {
+      auto ids = std::apply(
+          [&eg, &match](auto &&...ids) constexpr {
+            return get_match_ids(eg, match,
+                                 std::forward<decltype(ids)>(ids)...);
+          },
+          arg_ids);
+
+      return std::apply(
+          [&eg, &match, &fn](auto &&...ids) constexpr {
+            return fn(eg, match, std::forward<decltype(ids)>(ids)...);
+          },
+          ids);
+    };
+  };
 }
 
 } // namespace egs

@@ -3,7 +3,6 @@
 
 #include <concepts>
 #include <cstddef>
-#include <initializer_list>
 #include <iterator>
 #include <vector>
 
@@ -15,6 +14,7 @@
 #include "egs/internal/common.hpp"
 #include "egs/internal/dsu.hpp"
 #include "egs/pattern.hpp"
+#include <egs/utils.hpp>
 
 namespace egs {
 
@@ -22,12 +22,21 @@ template <Operator Op>
 struct EGraph {
 public:
   Id add(Op op, decltype(internal::ENode<Op>::args) args);
-  Id add(Op op, std::initializer_list<Id> args = {});
+  Id add(Op op, auto... args)
+    requires(std::conjunction_v<std::is_convertible<Id, decltype(args)>...>);
   bool merge(Id a, Id b);
   void rebuild();
   inline Id find(Id id) const;
   std::size_t total_nodes() const;
+
   inline internal::EClass<Op> &get_eclass(Id id) { return classes[id.val]; }
+
+  // scan with side-effect, `fn` should return `egs::ControlFlow`
+  inline constexpr auto for_each_node(Id id, auto &&fn);
+  // extract first matching rule, `fn` should return `std::optional`
+  inline constexpr auto find_in_eclass(Id id, auto &&fn);
+  // fold over nodes in eclass, `fn` should return the same type as `init`
+  inline constexpr auto fold_eclass(Id id, auto &&init, auto &&fn);
 
   using op_type = Op;
 
@@ -114,8 +123,10 @@ Id EGraph<Op>::add(Op op, decltype(internal::ENode<Op>::args) args) {
 }
 
 template <Operator Op>
-Id EGraph<Op>::add(Op op, std::initializer_list<Id> args) {
-  return add(op, decltype(internal::ENode<Op>::args){args});
+Id EGraph<Op>::add(Op op, auto... args)
+  requires(std::conjunction_v<std::is_convertible<Id, decltype(args)>...>)
+{
+  return add(op, decltype(internal::ENode<Op>::args){static_cast<Id>(args)...});
 }
 
 template <Operator Op>
@@ -191,6 +202,22 @@ std::size_t EGraph<Op>::total_nodes() const {
   for (const auto &eclass : classes)
     count += eclass.nodes.size();
   return count;
+}
+
+template <Operator Op>
+inline constexpr auto EGraph<Op>::for_each_node(Id id, auto &&fn) {
+  return egs::for_each_node(*this, id, std::forward<decltype(fn)>(fn));
+}
+
+template <Operator Op>
+inline constexpr auto EGraph<Op>::find_in_eclass(Id id, auto &&fn) {
+  return egs::find_in_eclass(*this, id, std::forward<decltype(fn)>(fn));
+}
+
+template <Operator Op>
+inline constexpr auto EGraph<Op>::fold_eclass(Id id, auto &&init, auto &&fn) {
+  return egs::fold_eclass(*this, id, std::forward<decltype(init)>(init),
+                          std::forward<decltype(fn)>(fn));
 }
 
 } // namespace egs
