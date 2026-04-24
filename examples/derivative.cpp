@@ -88,48 +88,54 @@ struct Cost {
   }
 };
 
-void print_tree(egs::ExtractedTree<Op> tree, int indent = 0) {
-  std::string indent_str(indent, ' ');
+void pretty_print(egs::ExtractedTree<Op> tree) {
   switch (tree.op.code) {
-  case OpCode::Const:
-    std::cout << indent_str << "Const(" << tree.op.val << ")\n";
-    break;
-  case OpCode::Var:
-    std::cout << indent_str << "Var(" << tree.op.val << ")\n";
-    break;
+  case OpCode::Const: std::cout << tree.op.val; break;
+  case OpCode::Var: std::cout << "x" << tree.op.val; break;
   case OpCode::Neg:
-    std::cout << indent_str << "Neg\n";
-    print_tree(tree.args[0], indent + 2);
+    std::cout << "(- ";
+    pretty_print(tree.args[0]);
+    std::cout << ")";
     break;
   case OpCode::Deriv:
-    std::cout << indent_str << "Deriv\n";
-    print_tree(tree.args[0], indent + 2);
-    print_tree(tree.args[1], indent + 2);
+    std::cout << "(d ";
+    pretty_print(tree.args[0]);
+    std::cout << " ";
+    pretty_print(tree.args[1]);
+    std::cout << ")";
     break;
   case OpCode::Add:
-    std::cout << indent_str << "Add\n";
-    for (const auto &arg : tree.args)
-      print_tree(arg, indent + 2);
+    std::cout << "(";
+    pretty_print(tree.args[0]);
+    std::cout << " + ";
+    pretty_print(tree.args[1]);
+    std::cout << ")";
     break;
   case OpCode::Sub:
-    std::cout << indent_str << "Sub\n";
-    for (const auto &arg : tree.args)
-      print_tree(arg, indent + 2);
+    std::cout << "(";
+    pretty_print(tree.args[0]);
+    std::cout << " - ";
+    pretty_print(tree.args[1]);
+    std::cout << ")";
     break;
   case OpCode::Mul:
-    std::cout << indent_str << "Mul\n";
-    for (const auto &arg : tree.args)
-      print_tree(arg, indent + 2);
+    std::cout << "(";
+    pretty_print(tree.args[0]);
+    std::cout << " * ";
+    pretty_print(tree.args[1]);
+    std::cout << ")";
     break;
   case OpCode::Div:
-    std::cout << indent_str << "Div\n";
-    for (const auto &arg : tree.args)
-      print_tree(arg, indent + 2);
+    std::cout << "(";
+    pretty_print(tree.args[0]);
+    std::cout << " / ";
+    pretty_print(tree.args[1]);
+    std::cout << ")";
     break;
   case OpCode::Exp:
-    std::cout << indent_str << "Exp\n";
-    for (const auto &arg : tree.args)
-      print_tree(arg, indent + 2);
+    pretty_print(tree.args[0]);
+    std::cout << "^";
+    pretty_print(tree.args[1]);
     break;
   }
 }
@@ -163,6 +169,7 @@ auto rules = egs::make_rules<Op>(
 
 int main() {
   auto egraph = egs::EGraph<Op>{};
+  // (2x + 3)^3
   auto diff_expr = Expr{BinaryOp{
     OpCode::Deriv,
     new Expr{BinaryOp{
@@ -241,5 +248,6 @@ int main() {
   auto extractor = egs::Extractor{egraph, Cost{}, UINT32_MAX};
   auto best = extractor.extract(root, egraph);
 
-  print_tree(best);
+  pretty_print(best);
+  std::cout << std::endl;
 }
