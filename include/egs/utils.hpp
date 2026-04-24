@@ -30,19 +30,37 @@ constexpr bool invokable_with_eg_op_v =
 
 using internal::utils::IsEGraph;
 
-template <Operator Op>
-constexpr std::vector<RwRule<Op>>
-make_rules(std::initializer_list<std::pair<std::string_view, std::string_view>>
-               rule_strs,
-           auto parse_op);
+template <Operator Op, typename ParseOp>
+struct RuleSet {
+  std::vector<RwRule<Op>> rules;
+  ParseOp parse_op;
+
+  inline constexpr void add(std::string_view search_str,
+                            std::string_view apply_str);
+  inline constexpr void add(std::string_view search_str, auto applier_gen);
+  // clang-format off
+  inline constexpr void add(RwRule<Op> &&rule) { rules.push_back(std::move(rule)); }
+  // clang-format on
+  inline constexpr void add(const RwRule<Op> &rule) { rules.push_back(rule); }
+
+  inline constexpr operator std::span<const RwRule<Op>>() const {
+    return {rules};
+  }
+};
 
 template <Operator Op>
-constexpr std::vector<RwRule<Op>> make_rules(
+constexpr auto
+make_rules(std::initializer_list<std::pair<std::string_view, std::string_view>>
+               rule_strs,
+           auto &&parse_op);
+
+template <Operator Op>
+constexpr auto make_rules(
     std::initializer_list<std::pair<
         std::string_view, std::function<DynamicApplier<Op>(
                               const typename Pattern<Op>::PaternVarMap &)>>>
         rule_strs,
-    auto parse_op);
+    auto &&parse_op);
 
 inline constexpr auto get_pattern_var(const PatternVarMap &vars,
                                       auto &&var_name);
@@ -94,6 +112,18 @@ inline constexpr auto bind(auto &&...args)
 
 namespace egs {
 
+template <Operator Op, typename ParseOp>
+inline constexpr void RuleSet<Op, ParseOp>::add(std::string_view search_str,
+                                                std::string_view apply_str) {
+  rules.push_back(RwRule<Op>::parse(search_str, apply_str, parse_op));
+}
+
+template <Operator Op, typename ParseOp>
+inline constexpr void RuleSet<Op, ParseOp>::add(std::string_view search_str,
+                                                auto applier_gen) {
+  rules.push_back(RwRule<Op>::parse(search_str, parse_op, applier_gen));
+}
+
 namespace internal {
 
 template <typename Eg, typename Getter, typename... Args>
@@ -109,27 +139,27 @@ struct invokable_with_eg_op {
 } // namespace internal
 
 template <Operator Op>
-constexpr std::vector<RwRule<Op>>
+constexpr auto
 make_rules(std::initializer_list<std::pair<std::string_view, std::string_view>>
                rule_strs,
-           auto parse_op) {
+           auto &&parse_op) {
   auto rules = std::vector<RwRule<Op>>{};
   for (const auto &[lhs, rhs] : rule_strs)
     rules.push_back(RwRule<Op>::parse(lhs, rhs, parse_op));
-  return rules;
+  return RuleSet{std::move(rules), std::forward<decltype(parse_op)>(parse_op)};
 }
 
 template <Operator Op>
-constexpr std::vector<RwRule<Op>> make_rules(
+constexpr auto make_rules(
     std::initializer_list<std::pair<
         std::string_view, std::function<DynamicApplier<Op>(
                               const typename Pattern<Op>::PaternVarMap &)>>>
         rule_strs,
-    auto parse_op) {
+    auto &&parse_op) {
   auto rules = std::vector<RwRule<Op>>{};
   for (const auto &[lhs, rhs] : rule_strs)
     rules.push_back(RwRule<Op>::parse(lhs, rhs, parse_op));
-  return rules;
+  return RuleSet{std::move(rules), std::forward<decltype(parse_op)>(parse_op)};
 }
 
 inline constexpr auto get_pattern_var(const PatternVarMap &vars,

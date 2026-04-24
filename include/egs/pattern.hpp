@@ -87,6 +87,10 @@ enum class StopReason {
 template <Operator Op>
 struct RwRule;
 template <Operator Op>
+inline constexpr StopReason
+run(EGraph<Op> &egraph, std::type_identity_t<std::span<const RwRule<Op>>> rules,
+    RunConfig config = {});
+template <Operator Op>
 StopReason run(EGraph<Op> &egraph, std::span<const RwRule<Op>> rules,
                RunConfig config = {});
 
@@ -272,6 +276,13 @@ Id add_pattern(EGraph<Op> &egraph, const Pattern<Op> &pat,
 }
 
 } // namespace internal
+
+template <Operator Op>
+inline constexpr StopReason
+run(EGraph<Op> &egraph, std::type_identity_t<std::span<const RwRule<Op>>> rules,
+    RunConfig config) {
+  return run(egraph, static_cast<std::span<const RwRule<Op>>>(rules), config);
+}
 
 template <Operator Op>
 StopReason run(EGraph<Op> &egraph, std::span<const RwRule<Op>> rules,

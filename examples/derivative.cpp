@@ -175,69 +175,61 @@ int main() {
     new Expr{Var{1}}}};
   auto root = egs::add_tree(egraph, diff_expr);
 
-  using R = egs::RwRule<Op>;
+  rules.add("(d ?c ?x)",
+            egs::bind("?c",
+                      [](egs::EGraph<Op> &eg, const egs::Match<Op> &match,
+                         egs::Id c) -> egs::RwResult {
+                        bool has_const = false;
+                        bool has_var = false;
+                        eg.for_each_node(c, [&](const Op &op) {
+                          if (op.code == OpCode::Const) has_const = true;
+                          if (op.code == OpCode::Var) has_var = true;
+                          if (has_const && has_var)
+                            return egs::ControlFlow::Break;
+                          return egs::ControlFlow::Continue;
+                        });
 
-  auto const_deriv =
-      R::parse("(d ?c ?x)", parse_op,
-               egs::bind("?c",
-                         [](egs::EGraph<Op> &eg, const egs::Match<Op> &match,
-                            egs::Id c) -> egs::RwResult {
-                           bool has_const = false;
-                           bool has_var = false;
-                           eg.for_each_node(c, [&](const Op &op) {
-                             if (op.code == OpCode::Const) has_const = true;
-                             if (op.code == OpCode::Var) has_var = true;
-                             if (has_const && has_var)
-                               return egs::ControlFlow::Break;
-                             return egs::ControlFlow::Continue;
-                           });
+                        if (has_const && !has_var)
+                          return eg.add({OpCode::Const, 0});
 
-                           if (has_const && !has_var)
-                             return eg.add({OpCode::Const, 0});
+                        return egs::no_rewrite;
+                      }));
+  rules.add("(d (exp ?u ?n) ?x)",
+            egs::bind("?u", "?n", "?x",
+                      [](egs::EGraph<Op> &eg, const egs::Match<Op> &match,
+                         egs::Id u, egs::Id n, egs::Id x) -> egs::RwResult {
+                        auto n_val = eg.find_in_eclass(
+                            n, [](Op op) -> std::optional<int> {
+                              if (op.code == OpCode::Const) return op.val;
+                              return std::nullopt;
+                            });
 
-                           return egs::no_rewrite;
-                         }));
-  rules.push_back(const_deriv);
-  auto power_deriv = R::parse(
-      "(d (exp ?u ?n) ?x)", parse_op,
-      egs::bind("?u", "?n", "?x",
-                [](egs::EGraph<Op> &eg, const egs::Match<Op> &match, egs::Id u,
-                   egs::Id n, egs::Id x) -> egs::RwResult {
-                  auto n_val =
-                      eg.find_in_eclass(n, [](Op op) -> std::optional<int> {
-                        if (op.code == OpCode::Const) return op.val;
-                        return std::nullopt;
-                      });
+                        if (!n_val) return egs::no_rewrite;
 
-                  if (!n_val) return egs::no_rewrite;
+                        auto n_minus_one = eg.add({OpCode::Const, *n_val - 1});
+                        auto exp_part = eg.add({OpCode::Exp}, u, n_minus_one);
+                        auto outer_deriv = eg.add({OpCode::Mul}, n, exp_part);
+                        auto inner_deriv = eg.add({OpCode::Deriv}, u, x);
+                        return eg.add({OpCode::Mul}, outer_deriv, inner_deriv);
+                      }));
+  rules.add("(* ?a ?b)",
+            egs::bind("?a", "?b",
+                      [](egs::EGraph<Op> &eg, const egs::Match<Op> &match,
+                         egs::Id a, egs::Id b) -> egs::RwResult {
+                        auto get_const = [](Op op) -> std::optional<int> {
+                          if (op.code == OpCode::Const) return op.val;
+                          return std::nullopt;
+                        };
 
-                  auto n_minus_one = eg.add({OpCode::Const, *n_val - 1});
-                  auto exp_part = eg.add({OpCode::Exp}, u, n_minus_one);
-                  auto outer_deriv = eg.add({OpCode::Mul}, n, exp_part);
-                  auto inner_deriv = eg.add({OpCode::Deriv}, u, x);
-                  return eg.add({OpCode::Mul}, outer_deriv, inner_deriv);
-                }));
-  rules.push_back(power_deriv);
-  auto fold_const_mul = R::parse(
-      "(* ?a ?b)", parse_op,
-      egs::bind("?a", "?b",
-                [](egs::EGraph<Op> &eg, const egs::Match<Op> &match, egs::Id a,
-                   egs::Id b) -> egs::RwResult {
-                  auto get_const = [](Op op) -> std::optional<int> {
-                    if (op.code == OpCode::Const) return op.val;
-                    return std::nullopt;
-                  };
+                        auto a_val = eg.find_in_eclass(a, get_const);
+                        auto b_val = eg.find_in_eclass(b, get_const);
 
-                  auto a_val = eg.find_in_eclass(a, get_const);
-                  auto b_val = eg.find_in_eclass(b, get_const);
+                        if (a_val && b_val)
+                          return eg.add({OpCode::Const, (*a_val) * (*b_val)});
+                        return egs::no_rewrite;
+                      }));
 
-                  if (a_val && b_val)
-                    return eg.add({OpCode::Const, (*a_val) * (*b_val)});
-                  return egs::no_rewrite;
-                }));
-  rules.push_back(fold_const_mul);
-
-  auto stop_reason = egs::run(egraph, {rules});
+  auto stop_reason = egs::run(egraph, rules);
   switch (stop_reason) {
   case egs::StopReason::Saturated: std::cout << "Saturated\n"; break;
   case egs::StopReason::IterationLimit:
