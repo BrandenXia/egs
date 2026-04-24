@@ -241,6 +241,7 @@ int main() {
   case egs::StopReason::Saturated: std::cout << "Saturated\n"; break;
   case egs::StopReason::IterationLimit:
     std::cout << "Iteration limit reached\n";
+    break;
   case egs::StopReason::NodeLimit: std::cout << "Node limit reached\n"; break;
   }
 
