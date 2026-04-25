@@ -197,7 +197,7 @@ int main() {
                         });
 
                         if (has_const && !has_var)
-                          return eg.add({OpCode::Const, 0});
+                          return eg.leaf(OpCode::Const, 0);
 
                         return egs::no_rewrite;
                       }));
@@ -213,11 +213,11 @@ int main() {
 
                         if (!n_val) return egs::no_rewrite;
 
-                        auto n_minus_one = eg.add({OpCode::Const, *n_val - 1});
-                        auto exp_part = eg.add({OpCode::Exp}, u, n_minus_one);
-                        auto outer_deriv = eg.add({OpCode::Mul}, n, exp_part);
-                        auto inner_deriv = eg.add({OpCode::Deriv}, u, x);
-                        return eg.add({OpCode::Mul}, outer_deriv, inner_deriv);
+                        auto n_minus_one = eg.leaf(OpCode::Const, *n_val - 1);
+                        auto exp_part = eg.make({OpCode::Exp}, u, n_minus_one);
+                        auto outer_deriv = eg.make({OpCode::Mul}, n, exp_part);
+                        auto inner_deriv = eg.make({OpCode::Deriv}, u, x);
+                        return eg.make({OpCode::Mul}, outer_deriv, inner_deriv);
                       }));
   rules.add("(* ?a ?b)",
             egs::bind("?a", "?b",
@@ -232,7 +232,7 @@ int main() {
                         auto b_val = eg.find_in_eclass(b, get_const);
 
                         if (a_val && b_val)
-                          return eg.add({OpCode::Const, (*a_val) * (*b_val)});
+                          return eg.leaf(OpCode::Const, (*a_val) * (*b_val));
                         return egs::no_rewrite;
                       }));
 

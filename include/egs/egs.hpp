@@ -22,8 +22,10 @@ template <Operator Op>
 struct EGraph {
 public:
   Id add(Op op, decltype(internal::ENode<Op>::args) args);
-  Id add(Op op, auto... args)
+  inline constexpr Id make(Op op, auto... args)
     requires(std::conjunction_v<std::is_convertible<Id, decltype(args)>...>);
+  inline constexpr Id leaf(auto &&...args)
+    requires(std::is_constructible_v<Op, decltype(args)...>);
   bool merge(Id a, Id b);
   void rebuild();
   inline Id find(Id id) const;
@@ -123,10 +125,17 @@ Id EGraph<Op>::add(Op op, decltype(internal::ENode<Op>::args) args) {
 }
 
 template <Operator Op>
-Id EGraph<Op>::add(Op op, auto... args)
+inline constexpr Id EGraph<Op>::make(Op op, auto... args)
   requires(std::conjunction_v<std::is_convertible<Id, decltype(args)>...>)
 {
   return add(op, decltype(internal::ENode<Op>::args){static_cast<Id>(args)...});
+}
+
+template <Operator Op>
+inline constexpr Id EGraph<Op>::leaf(auto &&...args)
+  requires(std::is_constructible_v<Op, decltype(args)...>)
+{
+  return make(Op{std::forward<decltype(args)>(args)...});
 }
 
 template <Operator Op>
