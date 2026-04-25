@@ -105,21 +105,21 @@ Id add_tree(EGraph<Op> &egraph, const UserAST &ast) {
 
 template <Operator Op>
 Id EGraph<Op>::add(Op op, decltype(internal::ENode<Op>::args) args) {
-  for (Id arg : args)
+  for (Id &arg : args)
     arg = find(arg);
 
-  const auto node = internal::ENode<Op>{op, args};
-
-  if (auto it = hashcons.find(node); it != hashcons.end()) return it->second;
+  auto [it, inserted] =
+      hashcons.try_emplace(internal::ENode<Op>{op, std::move(args)}, Id{});
+  if (!inserted) return it->second;
 
   Id id = dsu.make_set();
+  it->second = id;
 
-  for (Id arg : args)
+  const auto &node = it->first;
+  for (Id arg : node.args)
     classes[arg.val].parents.emplace_back(node, id);
-
   classes.emplace_back(id, decltype(internal::EClass<Op>::nodes){node},
                        decltype(internal::EClass<Op>::parents){});
-  hashcons.emplace(std::move(node), id);
 
   return id;
 }
@@ -128,7 +128,10 @@ template <Operator Op>
 inline constexpr Id EGraph<Op>::make(Op op, auto... args)
   requires(std::conjunction_v<std::is_convertible<Id, decltype(args)>...>)
 {
-  return add(op, decltype(internal::ENode<Op>::args){static_cast<Id>(args)...});
+  decltype(internal::ENode<Op>::args) vec;
+  vec.reserve(sizeof...(args));
+  (vec.push_back(static_cast<Id>(args)), ...);
+  return add(op, std::move(vec));
 }
 
 template <Operator Op>
