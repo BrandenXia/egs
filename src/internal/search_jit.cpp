@@ -69,26 +69,25 @@ static constexpr uint32_t JIT_MAX_REGS = 32;
 //
 // ---------------------------------------------------------------------------
 
-static llvm::Function *
-build_jit_function(llvm::Module &M, const std::vector<JitInst> &program,
-                   uint32_t root_eclass_reg,
-                   const std::vector<uint32_t> &var_regs,
-                   const std::string &fn_name) {
+static llvm::Function *build_jit_function(llvm::Module &M,
+                                          const std::vector<JitInst> &program,
+                                          uint32_t root_eclass_reg,
+                                          const std::vector<uint32_t> &var_regs,
+                                          const std::string &fn_name) {
   auto &ctx = M.getContext();
 
   // ---- LLVM types ----
   auto *i32 = llvm::Type::getInt32Ty(ctx);
-  auto *i64 = llvm::Type::getInt64Ty(ctx);
   auto *void_ty = llvm::Type::getVoidTy(ctx);
   // In LLVM 16+ opaque pointers are the default; we use a single ptr type.
   auto *ptr_ty = llvm::PointerType::getUnqual(ctx);
 
-  // struct JitTableEntry { uint32_t eclass_id; uint32_t num_args; const uint32_t *args; }
-  // x86-64 layout: { i32@0, i32@4, ptr@8 }, sizeof = 16
+  // struct JitTableEntry { uint32_t eclass_id; uint32_t num_args; const
+  // uint32_t *args; } x86-64 layout: { i32@0, i32@4, ptr@8 }, sizeof = 16
   auto *entry_ty = llvm::StructType::get(ctx, {i32, i32, ptr_ty});
 
-  // struct JitTable { const JitTableEntry *entries; uint32_t num_entries; uint32_t _pad; }
-  // x86-64 layout: { ptr@0, i32@8, i32@12 }, sizeof = 16
+  // struct JitTable { const JitTableEntry *entries; uint32_t num_entries;
+  // uint32_t _pad; } x86-64 layout: { ptr@0, i32@8, i32@12 }, sizeof = 16
   auto *table_ty = llvm::StructType::get(ctx, {ptr_ty, i32, i32});
 
   // JitEmitFn: void(void* ctx, i32 root, ptr subst, i32 n)
@@ -113,8 +112,7 @@ build_jit_function(llvm::Module &M, const std::vector<JitInst> &program,
   for (const auto &inst : program) {
     if (inst.out_eclass_reg >= JIT_MAX_REGS ||
         inst.in_eclass_reg >= JIT_MAX_REGS ||
-        inst.out_node_reg >= JIT_MAX_REGS ||
-        inst.in_node_reg >= JIT_MAX_REGS) {
+        inst.out_node_reg >= JIT_MAX_REGS || inst.in_node_reg >= JIT_MAX_REGS) {
       fn->eraseFromParent();
       return nullptr;
     }
@@ -125,18 +123,16 @@ build_jit_function(llvm::Module &M, const std::vector<JitInst> &program,
   // ---- Count LookUpOps ----
   int num_lookups = 0;
   for (const auto &inst : program)
-    if (inst.type == JitInst::LookUpOp)
-      ++num_lookups;
+    if (inst.type == JitInst::LookUpOp) ++num_lookups;
 
   // ---- Entry block: allocate scratch storage ----
   auto *entry_bb = llvm::BasicBlock::Create(ctx, "entry", fn);
   B.SetInsertPoint(entry_bb);
 
-  auto *regs_alloca = B.CreateAlloca(llvm::ArrayType::get(i32, JIT_MAX_REGS),
-                                     nullptr, "regs");
-  auto *node_args_alloca =
-      B.CreateAlloca(llvm::ArrayType::get(ptr_ty, JIT_MAX_REGS), nullptr,
-                     "node_args");
+  auto *regs_alloca =
+      B.CreateAlloca(llvm::ArrayType::get(i32, JIT_MAX_REGS), nullptr, "regs");
+  auto *node_args_alloca = B.CreateAlloca(
+      llvm::ArrayType::get(ptr_ty, JIT_MAX_REGS), nullptr, "node_args");
 
   // One alloca'd counter per loop level (reset to 0 when entering the loop).
   std::vector<llvm::Value *> counter_alloca(num_lookups, nullptr);
@@ -158,16 +154,12 @@ build_jit_function(llvm::Module &M, const std::vector<JitInst> &program,
   {
     int k = 0;
     for (const auto &inst : program) {
-      if (inst.type != JitInst::LookUpOp)
-        continue;
+      if (inst.type != JitInst::LookUpOp) continue;
       auto *tp = B.CreateInBoundsGEP(table_ty, arg_tables, B.getInt64(k),
                                      "tblp_" + std::to_string(k));
-      auto *ep = B.CreateStructGEP(table_ty, tp, 0,
-                                   "ep_" + std::to_string(k));
-      tbl_entries[k] =
-          B.CreateLoad(ptr_ty, ep, "entries_" + std::to_string(k));
-      auto *np = B.CreateStructGEP(table_ty, tp, 1,
-                                   "np_" + std::to_string(k));
+      auto *ep = B.CreateStructGEP(table_ty, tp, 0, "ep_" + std::to_string(k));
+      tbl_entries[k] = B.CreateLoad(ptr_ty, ep, "entries_" + std::to_string(k));
+      auto *np = B.CreateStructGEP(table_ty, tp, 1, "np_" + std::to_string(k));
       tbl_num[k] = B.CreateLoad(i32, np, "num_" + std::to_string(k));
       ++k;
     }
@@ -188,34 +180,38 @@ build_jit_function(llvm::Module &M, const std::vector<JitInst> &program,
 
   // ---- Helpers: register and node-args pointer access ----
   auto load_reg = [&](uint32_t idx) -> llvm::Value * {
-    auto *ptr = B.CreateInBoundsGEP(llvm::ArrayType::get(i32, JIT_MAX_REGS),
-                                    regs_alloca, {B.getInt64(0), B.getInt64(idx)});
+    auto *ptr =
+        B.CreateInBoundsGEP(llvm::ArrayType::get(i32, JIT_MAX_REGS),
+                            regs_alloca, {B.getInt64(0), B.getInt64(idx)});
     return B.CreateLoad(i32, ptr);
   };
   auto store_reg = [&](uint32_t idx, llvm::Value *v) {
-    auto *ptr = B.CreateInBoundsGEP(llvm::ArrayType::get(i32, JIT_MAX_REGS),
-                                    regs_alloca, {B.getInt64(0), B.getInt64(idx)});
+    auto *ptr =
+        B.CreateInBoundsGEP(llvm::ArrayType::get(i32, JIT_MAX_REGS),
+                            regs_alloca, {B.getInt64(0), B.getInt64(idx)});
     B.CreateStore(v, ptr);
   };
   auto load_nptr = [&](uint32_t idx) -> llvm::Value * {
-    auto *ptr = B.CreateInBoundsGEP(
-        llvm::ArrayType::get(ptr_ty, JIT_MAX_REGS), node_args_alloca,
-        {B.getInt64(0), B.getInt64(idx)});
+    auto *ptr =
+        B.CreateInBoundsGEP(llvm::ArrayType::get(ptr_ty, JIT_MAX_REGS),
+                            node_args_alloca, {B.getInt64(0), B.getInt64(idx)});
     return B.CreateLoad(ptr_ty, ptr);
   };
   auto store_nptr = [&](uint32_t idx, llvm::Value *v) {
-    auto *ptr = B.CreateInBoundsGEP(
-        llvm::ArrayType::get(ptr_ty, JIT_MAX_REGS), node_args_alloca,
-        {B.getInt64(0), B.getInt64(idx)});
+    auto *ptr =
+        B.CreateInBoundsGEP(llvm::ArrayType::get(ptr_ty, JIT_MAX_REGS),
+                            node_args_alloca, {B.getInt64(0), B.getInt64(idx)});
     B.CreateStore(v, ptr);
   };
 
   // ---- Single-pass code generation ----
   // cur_bb is the "current" insertion block. When we see a LookUpOp:
-  //   • store 0 to the loop counter and branch to the loop header (terminates cur_bb)
-  //   • fill loop header and the start of loop body, then switch cur_bb to lb[k]
+  //   • store 0 to the loop counter and branch to the loop header (terminates
+  //   cur_bb) • fill loop header and the start of loop body, then switch cur_bb
+  //   to lb[k]
   // Non-LookUpOp instructions are emitted into cur_bb.
-  // After the last instruction we emit the match and branch to the innermost incr.
+  // After the last instruction we emit the match and branch to the innermost
+  // incr.
 
   int cur_loop = -1; // index of the deepest active LookUpOp
   llvm::BasicBlock *cur_bb = entry_bb;
@@ -235,7 +231,8 @@ build_jit_function(llvm::Module &M, const std::vector<JitInst> &program,
 
       // Fill loop header: load counter, branch body vs exit.
       B.SetInsertPoint(lh[k]);
-      auto *cnt = B.CreateLoad(i32, counter_alloca[k], "i_" + std::to_string(k));
+      auto *cnt =
+          B.CreateLoad(i32, counter_alloca[k], "i_" + std::to_string(k));
       auto *done = B.CreateICmpUGE(cnt, tbl_num[k]);
       B.CreateCondBr(done, le[k], lb[k]);
 
@@ -257,9 +254,11 @@ build_jit_function(llvm::Module &M, const std::vector<JitInst> &program,
     }
 
     case JitInst::BindArg: {
-      // regs[out_eclass_reg] = canonical_child_id = node_args[in_node_reg][child_idx]
+      // regs[out_eclass_reg] = canonical_child_id =
+      // node_args[in_node_reg][child_idx]
       auto *nptr = load_nptr(inst.in_node_reg);
-      auto *arg_ptr = B.CreateInBoundsGEP(i32, nptr, B.getInt32(inst.child_idx));
+      auto *arg_ptr =
+          B.CreateInBoundsGEP(i32, nptr, B.getInt32(inst.child_idx));
       store_reg(inst.out_eclass_reg, B.CreateLoad(i32, arg_ptr));
       break;
     }
@@ -271,10 +270,9 @@ build_jit_function(llvm::Module &M, const std::vector<JitInst> &program,
       auto *r2 = load_reg(inst.in_eclass_reg);
       auto *eq = B.CreateICmpEQ(r1, r2);
 
-      auto *cont = llvm::BasicBlock::Create(
-          ctx, "cc_" + std::to_string(pc), fn);
-      llvm::BasicBlock *fail_dst =
-          (cur_loop >= 0) ? li[cur_loop] : ret_bb;
+      auto *cont =
+          llvm::BasicBlock::Create(ctx, "cc_" + std::to_string(pc), fn);
+      llvm::BasicBlock *fail_dst = (cur_loop >= 0) ? li[cur_loop] : ret_bb;
       B.CreateCondBr(eq, cont, fail_dst);
       cur_bb = cont;
       break;
@@ -290,15 +288,15 @@ build_jit_function(llvm::Module &M, const std::vector<JitInst> &program,
   llvm::Value *subst_ptr;
   if (nv > 0) {
     for (uint32_t i = 0; i < nv; ++i) {
-      auto *slot = B.CreateInBoundsGEP(llvm::ArrayType::get(i32, nv),
-                                       subst_alloca,
-                                       {B.getInt64(0), B.getInt64(i)});
+      auto *slot =
+          B.CreateInBoundsGEP(llvm::ArrayType::get(i32, nv), subst_alloca,
+                              {B.getInt64(0), B.getInt64(i)});
       B.CreateStore(load_reg(var_regs[i]), slot);
     }
     subst_ptr = B.CreateBitOrPointerCast(subst_alloca, ptr_ty);
   } else {
-    subst_ptr = llvm::ConstantPointerNull::get(
-        llvm::cast<llvm::PointerType>(ptr_ty));
+    subst_ptr =
+        llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_ty));
   }
   B.CreateCall(emit_fn_ty, arg_emit,
                {arg_ctx, root_ec, subst_ptr, B.getInt32(nv)});
@@ -378,8 +376,7 @@ SearchJit *get_search_jit() {
 //  Program hash (key for the compiled-function cache)
 // ---------------------------------------------------------------------------
 
-static std::size_t hash_program(const std::vector<JitInst> &prog,
-                                uint32_t root,
+static std::size_t hash_program(const std::vector<JitInst> &prog, uint32_t root,
                                 const std::vector<uint32_t> &vr) {
   auto mix = [](std::size_t h, std::size_t v) -> std::size_t {
     return h ^ (v + 0x9e3779b9u + (h << 6) + (h >> 2));
@@ -407,8 +404,7 @@ static std::size_t hash_program(const std::vector<JitInst> &prog,
 
 JitFn get_or_compile(SearchJit *jit, const std::vector<JitInst> &prog,
                      uint32_t root, const std::vector<uint32_t> &vr) {
-  if (!jit || !jit->valid())
-    return nullptr;
+  if (!jit || !jit->valid()) return nullptr;
 
   std::size_t key = hash_program(prog, root, vr);
 
@@ -418,8 +414,7 @@ JitFn get_or_compile(SearchJit *jit, const std::vector<JitInst> &prog,
 
   {
     auto it = jit->cache.find(key);
-    if (it != jit->cache.end())
-      return it->second;
+    if (it != jit->cache.end()) return it->second;
   }
 
   // ---- Build LLVM module ----
@@ -427,16 +422,16 @@ JitFn get_or_compile(SearchJit *jit, const std::vector<JitInst> &prog,
   auto &ctx_ref = *llvm_ctx;
   auto module = std::make_unique<llvm::Module>("egs_jit", ctx_ref);
   module->setDataLayout(jit->lljit->getDataLayout());
-  module->setTargetTriple(jit->lljit->getTargetTriple().str());
+  module->setTargetTriple(jit->lljit->getTargetTriple());
 
   uint64_t fn_id = jit->fn_counter.fetch_add(1, std::memory_order_relaxed);
   std::string fn_name = "egs_pat_" + std::to_string(fn_id);
 
-  if (!build_jit_function(*module, prog, root, vr, fn_name))
-    return nullptr;
+  if (!build_jit_function(*module, prog, root, vr, fn_name)) return nullptr;
 
   // ---- Add to JIT ----
-  auto tsm = llvm::orc::ThreadSafeModule(std::move(module), std::move(llvm_ctx));
+  auto tsm =
+      llvm::orc::ThreadSafeModule(std::move(module), std::move(llvm_ctx));
   if (auto err = jit->lljit->addIRModule(std::move(tsm))) {
     llvm::consumeError(std::move(err));
     return nullptr;
