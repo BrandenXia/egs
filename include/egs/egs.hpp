@@ -14,7 +14,7 @@
 #include "egs/internal/common.hpp"
 #include "egs/internal/dsu.hpp"
 #include "egs/pattern.hpp"
-#include <egs/utils.hpp>
+#include "egs/utils.hpp"
 
 namespace egs {
 
@@ -25,7 +25,7 @@ public:
   inline constexpr Id make(Op op, auto... args)
     requires(std::conjunction_v<std::is_convertible<Id, decltype(args)>...>);
   inline constexpr Id leaf(auto &&...args)
-    requires(std::is_constructible_v<Op, decltype(args)...>);
+    requires std::constructible_from<Op, decltype(args)...>;
   bool merge(Id a, Id b);
   void rebuild();
   inline Id find(Id id) const;
@@ -133,7 +133,7 @@ inline constexpr Id EGraph<Op>::make(Op op, auto... args)
 
 template <Operator Op>
 inline constexpr Id EGraph<Op>::leaf(auto &&...args)
-  requires(std::is_constructible_v<Op, decltype(args)...>)
+  requires std::constructible_from<Op, decltype(args)...>
 {
   return make(Op{std::forward<decltype(args)>(args)...});
 }
