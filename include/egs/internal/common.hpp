@@ -1,13 +1,16 @@
 #ifndef EGS_INTERNAL_COMMON_HPP
 #define EGS_INTERNAL_COMMON_HPP
 
+#include <algorithm>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <span>
 #include <utility>
 
 #include <absl/container/inlined_vector.h>
+#include <absl/hash/hash.h>
 
 namespace egs {
 
@@ -37,7 +40,54 @@ struct ENode {
 };
 
 template <Operator Op>
-struct EClass;
+struct ENodeView {
+  Op op;
+  std::span<const Id> args;
+};
+
+template <Operator Op>
+struct ENodeHash {
+  using is_transparent = void;
+
+  size_t operator()(const internal::ENode<Op> &n) const {
+    return hash_impl(n.op, std::span<const Id>(n.args));
+  }
+
+  size_t operator()(const ENodeView<Op> &v) const {
+    return hash_impl(v.op, v.args);
+  }
+
+private:
+  struct HashHelper {
+    Op op;
+    std::span<const Id> args;
+
+    template <typename H>
+    friend H AbslHashValue(H h, const HashHelper &m) {
+      h = H::combine(std::move(h), m.op);
+      return H::combine_contiguous(std::move(h), m.args.data(), m.args.size());
+    }
+  };
+
+  static size_t hash_impl(Op op, std::span<const Id> args) {
+    return absl::Hash<HashHelper>{}(HashHelper{op, args});
+  }
+};
+
+template <Operator Op>
+struct ENodeEq {
+  using is_transparent = void;
+
+  bool operator()(const internal::ENode<Op> &a,
+                  const internal::ENode<Op> &b) const {
+    return a.op == b.op && a.args == b.args;
+  }
+
+  bool operator()(const internal::ENode<Op> &a, const ENodeView<Op> &b) const {
+    if (a.op != b.op || a.args.size() != b.args.size()) return false;
+    return std::equal(a.args.begin(), a.args.end(), b.args.begin());
+  }
+};
 
 template <Operator Op>
 struct EClass {

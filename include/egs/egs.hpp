@@ -44,7 +44,9 @@ public:
 
 private:
   internal::dsu dsu;
-  absl::flat_hash_map<internal::ENode<Op>, Id> hashcons;
+  absl::flat_hash_map<internal::ENode<Op>, Id, internal::ENodeHash<Op>,
+                      internal::ENodeEq<Op>>
+      hashcons;
   std::vector<internal::EClass<Op>> classes;
   std::vector<Id> worklist;
   absl::flat_hash_set<Id> workset;
@@ -106,20 +108,20 @@ Id add_tree(EGraph<Op> &egraph, const UserAST &ast) {
 template <Operator Op>
 Id EGraph<Op>::add(Op op, decltype(internal::ENode<Op>::args) args) {
   for (Id &arg : args)
-    arg = find(arg);
+    arg = dsu.find(arg);
 
-  auto [it, inserted] =
-      hashcons.try_emplace(internal::ENode<Op>{op, std::move(args)}, Id{});
-  if (!inserted) return it->second;
+  internal::ENodeView<Op> view{op, args};
+  auto it = hashcons.find(view);
+  if (it != hashcons.end()) return it->second;
 
   Id id = dsu.make_set();
-  it->second = id;
 
-  const auto &node = it->first;
-  for (Id arg : node.args)
-    classes[arg.val].parents.emplace_back(node, id);
-  classes.emplace_back(id, decltype(internal::EClass<Op>::nodes){node},
+  internal::ENode<Op> new_node{op, std::move(args)};
+  for (Id arg : new_node.args)
+    classes[arg.val].parents.emplace_back(new_node, id);
+  classes.emplace_back(id, decltype(internal::EClass<Op>::nodes){new_node},
                        decltype(internal::EClass<Op>::parents){});
+  hashcons.emplace(std::move(new_node), id);
 
   return id;
 }
