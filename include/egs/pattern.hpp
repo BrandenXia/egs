@@ -86,10 +86,12 @@ enum class StopReason {
 
 template <Operator Op>
 struct RwRule;
+
 template <Operator Op>
 inline constexpr StopReason
 run(EGraph<Op> &egraph, std::type_identity_t<std::span<const RwRule<Op>>> rules,
     RunConfig config = {});
+
 template <Operator Op>
 StopReason run(EGraph<Op> &egraph, std::span<const RwRule<Op>> rules,
                RunConfig config = {});
@@ -258,7 +260,7 @@ template <Operator Op>
 Id add_pattern(EGraph<Op> &egraph, const typename Pattern<Op>::Node &node,
                std::span<const Id> subst) {
   if (auto *var = std::get_if<internal::Var>(&node.payload))
-    return egraph.find(subst[var->val]);
+    return subst[var->val];
 
   Op op = std::get<Op>(node.payload);
   absl::InlinedVector<Id, 4> arg_ids;
@@ -266,7 +268,7 @@ Id add_pattern(EGraph<Op> &egraph, const typename Pattern<Op>::Node &node,
   for (const auto &arg : node.args)
     arg_ids.push_back(add_pattern(egraph, arg, subst));
 
-  return egraph.add(op, arg_ids);
+  return egraph.add(op, std::move(arg_ids));
 }
 
 template <Operator Op>

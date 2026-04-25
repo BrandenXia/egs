@@ -3,6 +3,7 @@
 
 #include <concepts>
 #include <cstddef>
+#include <deque>
 #include <iterator>
 #include <vector>
 
@@ -47,7 +48,7 @@ private:
   absl::flat_hash_map<internal::ENode<Op>, Id, internal::ENodeHash<Op>,
                       internal::ENodeEq<Op>>
       hashcons;
-  std::vector<internal::EClass<Op>> classes;
+  std::deque<internal::EClass<Op>> classes;
   std::vector<Id> worklist;
   absl::flat_hash_set<Id> workset;
   absl::flat_hash_map<Op, std::vector<std::pair<Id, internal::ENode<Op>>>>
