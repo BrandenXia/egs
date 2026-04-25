@@ -59,9 +59,10 @@ private:
     if (workset.insert(id).second) worklist.push_back(id);
   }
 
-  friend std::vector<Match<Op>>
-  internal::search_relational(const EGraph<Op> &egraph,
-                              const std::vector<internal::Inst<Op>> &program,
+  template <Operator Op_>
+  friend std::vector<Match<Op_>>
+  internal::search_relational(const EGraph<Op_> &egraph,
+                              const std::vector<internal::Inst<Op_>> &program,
                               internal::Reg root_eclass_reg,
                               const std::vector<internal::Reg> &var_regs);
   template <Operator Op_, typename CostType>

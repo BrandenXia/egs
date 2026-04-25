@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "egs/internal/common.hpp"
+#include "egs/internal/search_jit.hpp"
 
 namespace egs {
 
@@ -78,6 +79,21 @@ struct MachineState {
   std::array<const internal::ENode<Op> *, MAX_REGS> node_regs = {};
 };
 
+/// Non-capturing callback used by the JIT path to append a match.
+/// The template parameter makes it a separate instantiation per Op while
+/// still being convertible to a plain C function pointer.
+template <Operator Op>
+static void emit_match_callback(void *ctx, uint32_t root_ec,
+                                 const uint32_t *subst, uint32_t n) {
+  auto *res = static_cast<std::vector<Match<Op>> *>(ctx);
+  Match<Op> m;
+  m.eclass = Id{root_ec};
+  m.subst.reserve(n);
+  for (uint32_t i = 0; i < n; ++i)
+    m.subst.push_back(Id{subst[i]});
+  res->push_back(std::move(m));
+}
+
 template <Operator Op>
 std::vector<Match<Op>> search_relational(const EGraph<Op> &egraph,
                                          const std::vector<Inst<Op>> &program,
@@ -86,6 +102,78 @@ std::vector<Match<Op>> search_relational(const EGraph<Op> &egraph,
   std::vector<Match<Op>> results;
   results.reserve(16);
 
+  // ------------------------------------------------------------------
+  // JIT path: build type-erased tables and try a compiled search fn.
+  // Falls through to the interpreter below if JIT is unavailable.
+  // ------------------------------------------------------------------
+  {
+    // Build the type-erased JitInst program and count LookUpOps.
+    std::vector<JitInst> jit_prog;
+    jit_prog.reserve(program.size());
+    uint32_t tbl_idx = 0;
+    for (const auto &inst : program) {
+      JitInst ji{};
+      ji.type            = static_cast<JitInst::Type>(inst.type);
+      ji.out_node_reg    = inst.out_node_reg;
+      ji.out_eclass_reg  = inst.out_eclass_reg;
+      ji.in_node_reg     = inst.in_node_reg;
+      ji.in_eclass_reg   = inst.in_eclass_reg;
+      ji.child_idx       = static_cast<uint32_t>(inst.child_idx);
+      if (inst.type == Inst<Op>::LookUpOp)
+        ji.table_idx = tbl_idx++;
+      jit_prog.push_back(ji);
+    }
+    int num_tables = static_cast<int>(tbl_idx);
+
+    // Build JitTable structs with pre-canonicalised args.
+    // We need stable storage for the arg arrays (they're pointed to by
+    // JitTableEntry::args), so keep args_store alive alongside jit_tables.
+    std::vector<std::vector<std::vector<uint32_t>>> args_store(num_tables);
+    std::vector<std::vector<JitTableEntry>> tbl_entries(num_tables);
+    std::vector<JitTable> jit_tables(num_tables);
+
+    int t = 0;
+    for (const auto &inst : program) {
+      if (inst.type != Inst<Op>::LookUpOp)
+        continue;
+      auto it = egraph.op_index.find(inst.op);
+      if (it != egraph.op_index.end() && !it->second.empty()) {
+        const auto &rows = it->second;
+        args_store[t].resize(rows.size());
+        tbl_entries[t].resize(rows.size());
+        for (std::size_t e = 0; e < rows.size(); ++e) {
+          const auto &[ec, node] = rows[e];
+          auto &arow = args_store[t][e];
+          arow.resize(node.args.size());
+          for (std::size_t a = 0; a < node.args.size(); ++a)
+            arow[a] = egraph.find(node.args[a]).val;
+          tbl_entries[t][e] = JitTableEntry{
+              ec.val,
+              static_cast<uint32_t>(arow.size()),
+              arow.empty() ? nullptr : arow.data()};
+        }
+        jit_tables[t] = JitTable{tbl_entries[t].data(),
+                                 static_cast<uint32_t>(tbl_entries[t].size()),
+                                 0};
+      } else {
+        jit_tables[t] = JitTable{nullptr, 0, 0};
+      }
+      ++t;
+    }
+
+    // Try JIT.
+    if (auto *jit_engine = get_search_jit()) {
+      if (auto jit_fn = get_or_compile(jit_engine, jit_prog,
+                                       root_eclass_reg, var_regs)) {
+        jit_fn(jit_tables.data(), &emit_match_callback<Op>, &results);
+        return results;
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Interpreter fallback
+  // ------------------------------------------------------------------
   using TableType =
       std::remove_reference_t<decltype(egraph.op_index.begin()->second)>;
   std::vector<const TableType *> resolved_tables(program.size(), nullptr);
@@ -103,7 +191,7 @@ std::vector<Match<Op>> search_relational(const EGraph<Op> &egraph,
   while (!stack.empty()) {
     auto &state = stack.back();
 
-    if (state.pc == program.size()) {
+    if (static_cast<std::size_t>(state.pc) == program.size()) {
       Match<Op> match;
       match.eclass = state.id_regs[root_eclass_reg];
 
@@ -202,8 +290,8 @@ void PatternCompiler<Op>::compile(const typename Pattern<Op>::Node &node,
       Reg child_id_reg = next_id_reg++;
       program.push_back({
         .type = Inst<Op>::BindArg,
-        .in_node_reg = node_reg,
         .out_eclass_reg = child_id_reg,
+        .in_node_reg = node_reg,
         .child_idx = (int)i,
       });
       compile(node.args[i], child_id_reg);

@@ -1,1 +1,3 @@
 option('build_examples', type : 'boolean', value : false, description : 'Build optional examples')
+option('enable_jit', type : 'feature', value : 'auto',
+       description : 'Enable LLVM ORC JIT backend for pattern search (requires LLVM >= 16)')
