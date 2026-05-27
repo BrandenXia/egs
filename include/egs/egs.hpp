@@ -60,10 +60,10 @@ private:
   }
 
   friend std::vector<Match<Op>>
-  internal::search_relational(const EGraph<Op> &egraph,
-                              const std::vector<internal::Inst<Op>> &program,
-                              internal::Reg root_eclass_reg,
-                              const std::vector<internal::Reg> &var_regs);
+  internal::search_relational<>(const EGraph<Op> &egraph,
+                                const std::vector<internal::Inst<Op>> &program,
+                                internal::Reg root_eclass_reg,
+                                const std::vector<internal::Reg> &var_regs);
   template <Operator Op_, typename CostType>
   friend struct Extractor;
 };
