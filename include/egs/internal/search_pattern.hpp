@@ -103,7 +103,7 @@ std::vector<Match<Op>> search_relational(const EGraph<Op> &egraph,
   while (!stack.empty()) {
     auto &state = stack.back();
 
-    if (state.pc == program.size()) {
+    if (state.pc == (int)program.size()) {
       Match<Op> match;
       match.eclass = state.id_regs[root_eclass_reg];
 
