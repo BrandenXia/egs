@@ -202,8 +202,8 @@ void PatternCompiler<Op>::compile(const typename Pattern<Op>::Node &node,
       Reg child_id_reg = next_id_reg++;
       program.push_back({
         .type = Inst<Op>::BindArg,
-        .in_node_reg = node_reg,
         .out_eclass_reg = child_id_reg,
+        .in_node_reg = node_reg,
         .child_idx = (int)i,
       });
       compile(node.args[i], child_id_reg);
